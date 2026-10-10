@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DP World Hybrid Workforce Platform</title>
+  <meta name="description" content="Local DP World Hybrid Workforce Platform for 3PL process simulation, robotics matching, 3D warehouse visualization, and ROI analysis." />
+  <link rel="icon" href="assets/dp-world-logo.jpg" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-card">
+        <img src="assets/dp-world-logo.jpg" alt="DP World logo" class="brand-logo" />
+        <div>
+          <p class="eyebrow">Contract Logistics demonstrator</p>
+          <h1>Hybrid Workforce Platform</h1>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Primary navigation">
+        <button class="nav-item active" data-view="cockpit"><span class="nav-icon">01</span><span>Executive Cockpit</span></button>
+        <button class="nav-item" data-view="process"><span class="nav-icon">02</span><span>Process Configurator</span></button>
+        <button class="nav-item" data-view="simulation"><span class="nav-icon">03</span><span>3D Simulation</span></button>
+        <button class="nav-item" data-view="marketplace"><span class="nav-icon">04</span><span>OEM Marketplace</span></button>
+        <button class="nav-item" data-view="assistant"><span class="nav-icon">05</span><span>AI Advisor</span></button>
+        <button class="nav-item" data-view="architecture"><span class="nav-icon">06</span><span>Four-Layer Architecture</span></button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-pill"><span class="pulse"></span>Local simulation mode</div>
+        <p>Runs offline from standalone.html or through localhost. No external dependencies, no server API, and no data leaves the machine.</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">CapEx-light automation strategy</p>
+          <h2 id="pageTitle">Executive Cockpit</h2>
+        </div>
+        <div class="topbar-actions">
+          <button id="exportScenario" class="btn ghost">Export scenario</button>
+          <label class="btn ghost file-label" for="importScenario">Import scenario</label>
+          <input id="importScenario" type="file" accept="application/json" hidden />
+          <button id="resetScenario" class="btn primary">Reset baseline</button>
+        </div>
+      </header>
+
+      <section id="cockpit" class="view active-view">
+        <div class="hero-grid">
+          <div class="hero-card glass-card">
+            <div class="hero-copy">
+              <p class="eyebrow">Strategic thesis</p>
+              <h3>Plan, simulate, and operate a hybrid workforce of people, robots, and AI.</h3>
+              <p>The platform evaluates 3PL processes, translates work into capability requirements, compares certified OEM options, and models the best human plus robotic operating model before deployment.</p>
+              <div class="hero-actions">
+                <button class="btn primary" data-jump="process">Configure a process</button>
+                <button class="btn secondary" data-jump="simulation">Run 3D simulation</button>
+              </div>
+            </div>
+            <div class="hero-orbit" aria-hidden="true">
+              <div class="orbit orbit-1"></div>
+              <div class="orbit orbit-2"></div>
+              <div class="orbit orbit-3"></div>
+              <div class="robot-token">HWP</div>
+            </div>
+          </div>
+
+          <div class="decision-card glass-card">
+            <p class="eyebrow">Recommendation</p>
+            <h3 id="recommendationTitle">Calculating...</h3>
+            <p id="recommendationText">The simulator is evaluating process fit, robotics maturity, cost, ROI, and technical readiness.</p>
+            <div class="confidence-meter">
+              <div class="confidence-label"><span>Deployment confidence</span><strong id="confidenceValue">0%</strong></div>
+              <div class="meter"><span id="confidenceBar"></span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="kpi-grid" id="kpiGrid"></div>
+
+        <div class="panel-grid two-col cockpit-charts">
+          <div class="panel chart-panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Manual vs hybrid-assisted</p>
+                <h3>Operating performance</h3>
+              </div>
+              <span class="tag">Live model</span>
+            </div>
+            <div class="chart-wrap large-chart">
+              <canvas id="performanceChart" height="330"></canvas>
+            </div>
+          </div>
+
+          <div class="panel chart-panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Cost profile</p>
+                <h3>Annual economics</h3>
+              </div>
+              <span class="tag capex-light">CapEx-light</span>
+            </div>
+            <div class="chart-wrap large-chart">
+              <canvas id="costChart" height="330"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="process" class="view">
+        <div class="panel-grid process-layout">
+          <div class="panel form-panel">
+            <div class="panel-header sticky-header">
+              <div>
+                <p class="eyebrow">Layer 1</p>
+                <h3>Business Process Configuration</h3>
+              </div>
+              <span class="tag">3PL workflow</span>
+            </div>
+
+            <div class="field-group">
+              <label for="processSelect">Select process</label>
+              <select id="processSelect"></select>
+            </div>
+
+            <div id="processSummary" class="process-summary"></div>
+
+            <div id="customProcessBuilder" class="custom-builder">
+              <div class="section-label">Custom process flow</div>
+              <div class="form-grid">
+                <div class="field-group">
+                  <label for="customProcessName">Process name</label>
+                  <input id="customProcessName" type="text" placeholder="Example: High-value electronics kitting" />
+                </div>
+                <div class="field-group">
+                  <label for="customProcessCategory">Category</label>
+                  <input id="customProcessCategory" type="text" placeholder="Inbound / Outbound / VAS / Custom" />
+                </div>
+              </div>
+              <div class="field-group">
+                <label for="customProcessSummary">Process description</label>
+                <textarea id="customProcessSummary" rows="3" placeholder="Describe the operational flow, constraints, and customer requirements."></textarea>
+              </div>
+              <div class="field-group">
+                <label for="customProcessSteps">Workflow steps, one per line</label>
+                <textarea id="customProcessSteps" rows="6" placeholder="Receive task&#10;Move material&#10;Scan or inspect&#10;Place / handoff&#10;Close transaction"></textarea>
+              </div>
+              <button id="applyCustomProcess" class="btn secondary" type="button">Apply custom process</button>
+            </div>
+
+            <div class="upload-card">
+              <div>
+                <p class="section-label">Engineering / flow upload</p>
+                <p class="muted small">Attach engineering models, process flows, layouts, material-flow CSVs, or JSON/TXT step lists. This offline demo stores metadata locally and can read simple JSON/TXT/CSV step lists.</p>
+              </div>
+              <label class="btn ghost file-label" for="engineeringUploads">Upload files</label>
+              <input id="engineeringUploads" type="file" multiple accept=".json,.csv,.txt,.svg,.png,.jpg,.jpeg,.pdf,.ifc,.dwg,.dxf,.step,.stp,.glb,.gltf,.xlsx,.xls" hidden />
+              <div id="uploadedAssetList" class="asset-list"></div>
+            </div>
+
+            <div class="form-grid">
+              <div class="field-group">
+                <label for="regionSelect">Region / labor market</label>
+                <select id="regionSelect"></select>
+              </div>
+              <div class="field-group">
+                <label for="commercialModel">Deployment option</label>
+                <select id="commercialModel">
+                  <option value="raas">RaaS / managed service</option>
+                  <option value="lease">Operating lease</option>
+                  <option value="purchase">Purchase with service contract</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="slider-list" id="parameterSliders"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Layer 2</p>
+                <h3>Capability Requirements</h3>
+              </div>
+              <span class="tag">Skill map</span>
+            </div>
+            <div id="capabilityRadar" class="capability-grid"></div>
+            <div class="decision-notes" id="decisionNotes"></div>
+          </div>
+
+          <div class="panel wide-panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Simulation outputs</p>
+                <h3>Recommended workforce design</h3>
+              </div>
+              <span class="tag">Auto-calculated</span>
+            </div>
+            <div id="recommendationGrid" class="recommendation-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="simulation" class="view">
+        <div class="simulation-shell">
+          <div class="sim-toolbar panel">
+            <div>
+              <p class="eyebrow">Layer 4</p>
+              <h3>Warehouse Digital Twin Simulation</h3>
+              <p class="muted">High-fidelity, Omniverse-inspired 3D warehouse rendering with a realistic human and robotic workforce comparator. This remains an offline browser visualization, not an NVIDIA Omniverse runtime.</p>
+            </div>
+            <div class="sim-controls">
+              <button id="simPlay" class="btn primary">Play</button>
+              <button id="simPause" class="btn ghost">Pause</button>
+              <button id="simReset" class="btn ghost">Reset</button>
+              <label class="inline-control">Speed <input id="simSpeed" type="range" min="0.5" max="3" step="0.5" value="1" /></label>
+            </div>
+          </div>
+
+          <div class="sim-grid">
+            <div class="scene-card panel">
+              <canvas id="warehouseCanvas" width="1280" height="760"></canvas>
+              <div class="scene-overlay">
+                <span><i class="legend-dot robot"></i> Hybrid robot path</span>
+                <span><i class="legend-dot human"></i> Manual path</span>
+                <span><i class="legend-dot task"></i> Active task node</span>
+                <span><i class="legend-dot twin"></i> Omniverse-style digital twin</span>
+              </div>
+            </div>
+
+            <div class="panel sim-side-panel">
+              <div class="panel-header">
+                <div>
+                  <p class="eyebrow">Live simulation telemetry</p>
+                  <h3 id="simProcessTitle">Process</h3>
+                </div>
+                <span id="simStateTag" class="tag">Ready</span>
+              </div>
+              <div id="simTelemetry" class="telemetry-list"></div>
+              <div class="timeline" id="workflowTimeline"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="marketplace" class="view">
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Layer 3</p>
+              <h3>Certified OEM Marketplace</h3>
+              <p class="muted">Vendor-neutral scoring across humanoids, AMRs, robotic forklifts, robotic arms, vision systems, and warehouse-specialist robots prevents lock-in and recommends the best capability combination for each process.</p>
+            </div>
+            <div class="table-actions">
+              <input id="oemSearch" class="search" type="search" placeholder="Search OEM or capability" />
+              <select id="oemFilter" class="search-select">
+                <option value="all">All technologies</option>
+                <option value="humanoid">Humanoids</option>
+                <option value="amr">AMRs / mobile robots</option>
+                <option value="robotic-forklift">Robotic forklifts</option>
+                <option value="robotic-arm">Robotic arms / cells</option>
+                <option value="vision">Vision / scan / drones</option>
+                <option value="warehouse-specialist">Warehouse specialists</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="oemTable">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>OEM / robot</th>
+                  <th>Technology</th>
+                  <th>Payload</th>
+                  <th>Endurance</th>
+                  <th>Speed</th>
+                  <th>Deployment</th>
+                  <th>Match</th>
+                  <th>Commercial maturity</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel-grid two-col marketplace-lower">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Recommended combination</p>
+                <h3>Hybrid automation mix</h3>
+              </div>
+            </div>
+            <div id="automationMixPanel" class="mix-grid"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Capability breakdown</p>
+                <h3>Top OEM scorecard</h3>
+              </div>
+            </div>
+            <canvas id="oemScoreChart" height="320"></canvas>
+          </div>
+        </div>
+
+        <div class="panel-grid two-col marketplace-lower">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Hybrid workforce design</p>
+                <h3>Combination logic</h3>
+              </div>
+            </div>
+            <div id="automationMix" class="mix-grid"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Guardrails</p>
+                <h3>When not to use humanoids</h3>
+              </div>
+            </div>
+            <div id="guardrails" class="guardrails"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="assistant" class="view">
+        <div class="assistant-layout">
+          <div class="panel assistant-panel">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Conversational AI interface</p>
+                <h3>DP World Hybrid Workforce Advisor</h3>
+                <p class="muted">Offline rule-based assistant. Replace the local adapter with an enterprise LLM gateway for production.</p>
+              </div>
+              <span class="tag">Context-aware</span>
+            </div>
+            <div id="chatMessages" class="chat-messages"></div>
+            <form id="chatForm" class="chat-form">
+              <input id="chatInput" type="text" placeholder="Ask: Which automation mix should I use for case picking in Singapore?" autocomplete="off" />
+              <button class="btn primary" type="submit">Ask</button>
+            </form>
+          </div>
+
+          <div class="panel prompt-panel">
+            <p class="eyebrow">Suggested questions</p>
+            <button class="prompt-chip">Why is the top robot recommended?</button>
+            <button class="prompt-chip">What is the best AMR, forklift, robotic arm, vision and humanoid mix?</button>
+            <button class="prompt-chip">How can we make this more CapEx-light?</button>
+            <button class="prompt-chip">What are the main safety risks?</button>
+            <button class="prompt-chip">Compare manual and hybrid ROI.</button>
+            <button class="prompt-chip">Which processes should be pilots?</button>
+            <button class="prompt-chip">What data should DP World collect before deployment?</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="architecture" class="view">
+        <div class="panel architecture-hero">
+          <p class="eyebrow">Enterprise architecture</p>
+          <h3>Four-layer framework for DP World 3PL hybrid workforce orchestration</h3>
+          <p>This demonstrator is structured like a production platform: process ontology, capability library, OEM marketplace, and hybrid workforce platform. In production, the same logic would connect to WMS, WES, TMS, ERP, HR, safety systems, IoT, AWS digital twin services, and certified OEM APIs.</p>
+        </div>
+
+        <div class="architecture-grid">
+          <article class="architecture-card layer-1"><span>Layer 1</span><h4>Business Processes</h4><p>Standardizes inbound, putaway, picking, packing, inventory, returns, cross dock, container unloading, pallet movement, truck loading, VAS, and yard inspection into repeatable process models.</p><ul><li>Process templates</li><li>Task breakdown</li><li>Cycle-time assumptions</li><li>Site constraints</li></ul></article>
+          <article class="architecture-card layer-2"><span>Layer 2</span><h4>Capability Library</h4><p>Converts work into capabilities such as lifting, walking, scanning, manipulation, mobility, vision inspection, dexterity, endurance, integration, and safety behavior.</p><ul><li>Skill taxonomy</li><li>Capability scoring</li><li>Process-fit logic</li><li>Safety limits</li></ul></article>
+          <article class="architecture-card layer-3"><span>Layer 3</span><h4>OEM Marketplace</h4><p>Compares certified humanoid and specialist robotics OEMs by capability, maturity, commercial model, API readiness, serviceability, scalability, and CapEx-light fit.</p><ul><li>Vendor certification</li><li>RaaS and leasing</li><li>API integration</li><li>Performance SLAs</li></ul></article>
+          <article class="architecture-card layer-4"><span>Layer 4</span><h4>Hybrid Workforce Platform</h4><p>Orchestrates digital twin simulation, scheduling, fleet management, task allocation, AI guidance, analytics, maintenance, security, and monitoring.</p><ul><li>Digital twin</li><li>AI brain and assistant</li><li>Fleet orchestration</li><li>KPI governance</li></ul></article>
+        </div>
+
+        <div class="panel integration-map">
+          <div class="panel-header"><div><p class="eyebrow">Integration view</p><h3>How the layers interact</h3></div></div>
+          <div class="flow-map">
+            <div class="flow-node">User / Operations</div><div class="flow-link"></div>
+            <div class="flow-node">Presentation and 3D simulation</div><div class="flow-link"></div>
+            <div class="flow-node">Business logic and matching engine</div><div class="flow-link"></div>
+            <div class="flow-node">Data models and capability library</div><div class="flow-link"></div>
+            <div class="flow-node">WMS / WES / TMS / ERP / AWS / OEM APIs</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <noscript><div class="toast show">This application requires JavaScript. Please enable JavaScript in your browser.</div></noscript>
+
+  <script src="js/app.bundle.js"></script>
+</body>
+</html>
