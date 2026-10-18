@@ -1,3043 +1,917 @@
-/*
- DP World Hybrid Workforce Platform - Browser-compatible bundle
- Local/offline execution: removes ES-module imports and avoids fetch/server dependencies.
-*/
-(function installLocalCompatibility(){
-  if (typeof window !== "undefined" && typeof window.structuredClone !== "function") {
-    window.structuredClone = function structuredClonePolyfill(value) { return JSON.parse(JSON.stringify(value)); };
-  }
-  if (typeof window !== "undefined" && typeof window.ResizeObserver !== "function") {
-    window.ResizeObserver = class ResizeObserverFallback {
-      constructor(callback) { this.callback = callback; this.items = []; this._timer = null; }
-      observe(target) {
-        this.items.push(target);
-        if (!this._timer) this._timer = window.setInterval(() => this.callback(this.items.map(target => ({ target }))), 500);
-      }
-      unobserve(target) { this.items = this.items.filter(item => item !== target); }
-      disconnect() { if (this._timer) window.clearInterval(this._timer); this._timer = null; this.items = []; }
-    };
-  }
-})();
+/* Hybrid Workforce version 2. Local planning prototype. */
+(function(){
+"use strict";
 
+/* data.js */
+const APP_SCHEMA = 2;
+const STAGES = ['Define', 'Evaluate', 'Decide', 'Prepare', 'Pilot', 'Operate', 'Paused'];
+const CASE_TABS = ['Overview', 'Inputs', 'Process', 'Matches', 'Scenarios', 'Results', 'Deployment', 'Learning'];
+const SKILLS = ['inspect', 'classify', 'scan', 'reach', 'grip', 'lift', 'transport', 'orient', 'place', 'confirm', 'exchange', 'clear'];
+const SOURCE_STATES = ['Sample', 'Assumed', 'Supplier claim', 'Simulated', 'Measured', 'Unknown', 'Out of date'];
+const uid = (prefix = 'record') => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const copy = value => JSON.parse(JSON.stringify(value));
 
-/* ===== src-modules/data.js ===== */
-const REGIONS = [
-  { id: "singapore", name: "Singapore", currency: "USD", wageUsdHour: 24, burden: 1.42, availabilityRisk: 78 },
-  { id: "australia", name: "Australia", currency: "USD", wageUsdHour: 31, burden: 1.36, availabilityRisk: 74 },
-  { id: "europe", name: "Europe high-cost cluster", currency: "USD", wageUsdHour: 34, burden: 1.38, availabilityRisk: 70 },
-  { id: "usa", name: "United States", currency: "USD", wageUsdHour: 26, burden: 1.34, availabilityRisk: 76 },
-  { id: "canada", name: "Canada", currency: "USD", wageUsdHour: 25, burden: 1.35, availabilityRisk: 72 },
-  { id: "other-high-cost", name: "Other high-cost global sites", currency: "USD", wageUsdHour: 22, burden: 1.3, availabilityRisk: 66 }
+function seedConfigs() {
+  const base = { revision: 1, source: 'Sample', sourceDate: '2026-10-18', sourceNote: 'Fictional engineering envelope. No supplier or site test.', payloadKg: 12, reachM: 1.6, minAisleM: 1.1, successPct: 97, interventionPct: 0.5, recoverySec: 90, chargePct: 12, downtimePct: 8, supportAnnual: 9000, energyAnnual: 1500, price: 100000, leaseMonthly: 4800, serviceIncluded: true, interface: 'Not verified', leadWeeks: null };
+  return [
+    { ...base, id: 'humanoid-h1', name: 'Humanoid H1', family: 'Humanoid', description: 'Mobile manipulation for a continuous lift, move, and place bundle.', skills: ['inspect', 'classify', 'reach', 'grip', 'lift', 'transport', 'orient', 'place'], times: { inspect: 3, classify: 3, reach: 3.5, grip: 1.5, lift: 2.5, transport: 7, orient: 2.5, place: 3.5 } },
+    { ...base, id: 'arm-a1', name: 'Arm cell A1', family: 'Robot arm', description: 'Fixed manipulation cell. Transport needs a separate actor and a carrier handoff.', payloadKg: 18, reachM: 1.8, price: 55000, leaseMonthly: 2700, chargePct: 0, downtimePct: 6, supportAnnual: 6000, energyAnnual: 800, skills: ['reach', 'grip', 'lift', 'orient', 'place'], times: { reach: 1.8, grip: 0.8, lift: 1.2, orient: 1.5, place: 2 } },
+    { ...base, id: 'amr-m1', name: 'AMR M1', family: 'AMR', description: 'Carrier transport. The robot does not pick up a loose tote by itself.', payloadKg: 250, reachM: 0, price: 42000, leaseMonthly: 2100, chargePct: 10, downtimePct: 5, supportAnnual: 4200, energyAnnual: 900, skills: ['transport'], times: { transport: 6.5 } },
+    { ...base, id: 'vision-v1', name: 'Vision station V1', family: 'Vision', description: 'Classification and code reading at a prepared station.', payloadKg: 0, reachM: 0, price: 12000, leaseMonthly: 600, chargePct: 0, downtimePct: 3, supportAnnual: 1400, energyAnnual: 200, skills: ['inspect', 'classify', 'scan', 'confirm'], times: { inspect: 0.7, classify: 0.6, scan: 0.4, confirm: 0.3 } },
+    { ...base, id: 'assist-l1', name: 'Lift assist L1', family: 'Assist tool', description: 'An operator remains at the tool. This option reduces handling effort, not staffing by itself.', price: 9000, leaseMonthly: 450, chargePct: 0, downtimePct: 2, supportAnnual: 900, energyAnnual: 100, skills: ['lift'], times: { lift: 1.2 }, requiresOperator: true },
+    { ...base, id: 'agibot-target', name: 'AGIBOT target · model pending', family: 'Humanoid', description: 'The PoC target. Model, tools, software, price, and performance need OEM/AWS confirmation.', source: 'Unknown', sourceNote: 'Vendor name only. No supported configuration or performance record is available.', payloadKg: null, reachM: null, minAisleM: null, successPct: null, interventionPct: null, price: null, leaseMonthly: null, skills: ['reach', 'grip', 'lift', 'transport', 'orient', 'place'], times: {} }
+  ];
+}
+
+function toteActions() {
+  const rows = [
+    ['Inspect the tote', 'inspect', 2, 'Check damage and contamination.'],
+    ['Identify the tote type', 'classify', 2, 'Read shape or type information.'],
+    ['Read the tote code', 'scan', 1.5, 'Confirm the work item.'],
+    ['Reach the tote', 'reach', 3, 'Reach from a known presentation point.'],
+    ['Grip the tote', 'grip', 1, 'Secure the agreed grip points.'],
+    ['Lift the tote clear', 'lift', 2, 'Keep the load stable.'],
+    ['Move to the sort point', 'transport', 6, 'Travel on the defined route.'],
+    ['Orient the tote', 'orient', 2, 'Align the tote with its destination.'],
+    ['Place the tote', 'place', 3, 'Release it in a stable position.'],
+    ['Confirm completion', 'confirm', 1, 'Record the correct destination.'],
+    ['Exchange the full carrier', 'exchange', 3, 'Keep an empty carrier available.'],
+    ['Clear the work area', 'clear', 3.5, 'Keep the route and work area usable.']
+  ];
+  return rows.map(([name, skill, seconds, note], index) => ({ id: `action-${index + 1}`, name, skill, seconds, frequency: 1, taskGroup: index < 3 ? 'Identify the tote' : index < 9 ? 'Handle and sort' : 'Confirm and support', workElement: name, object: 'Empty tote', from: index < 6 ? 'Presentation point' : 'Transfer point', to: index < 6 ? 'Transfer point' : 'Sort carrier', timingMethod: 'Assumed example', mtmCode: '', sampleCount: null, payloadKg: ['reach', 'grip', 'lift', 'transport', 'orient', 'place'].includes(skill) ? 7 : 0, reachM: ['reach', 'grip', 'lift', 'orient', 'place'].includes(skill) ? 1.2 : 0, aisleM: 1.5, source: 'Sample', sourceId: 'source-process', note, recovery: 'Stop and ask the assigned operator.', dependency: index ? `action-${index}` : '', parallel: false }));
+}
+
+function makeCase(name = 'Empty tote sorting', id = uid('case')) {
+  const actions = toteActions();
+  return {
+    id, name, site: 'Automotive site · name pending', country: 'Germany', owner: 'Process engineering', stage: 'Evaluate', revision: 1, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), sample: true,
+    purpose: 'Find a useful split of work between people and technology. Compare the whole process and its cost.',
+    baseline: { demandDaily: 5000, peakFactor: 1.2, shifts: 2, shiftHours: 7.5, daysYear: 250, peoplePerShift: 4, humanUtilPct: 85, salaryAnnual: 75000, minPeoplePerShift: 1, staffingCover: 1, qualityTargetPct: 95, routeM: 5 },
+    economics: { commercialModel: 'purchase', integration: 65000, siteChanges: 20000, softwareAnnual: 12000, supportAnnual: 6000, rampMonths: 3, horizonYears: 5, discountPct: 10, retainedPct: 75, cashableFte: 4, benefitMode: 'Avoided hires', residualValue: 0, otherBenefitAnnual: 0, handoffSec: 0.5 },
+    actions,
+    sources: [
+      { id: 'source-process', name: 'Tote process breakdown', type: 'Process / SOP', status: 'Sample', date: '2026-10-18', note: 'Twelve illustrative actions. Replace them with the site-reviewed process breakdown.', fileId: null },
+      { id: 'source-engineering', name: 'Staffing and engineering model', type: 'Engineering model', status: 'Sample', date: '2026-10-18', note: 'Four positions per shift, two shifts. EUR75,000 per annual position. These are scenario assumptions.', fileId: null },
+      { id: 'source-layout', name: 'Site layout', type: 'Layout / CAD', status: 'Unknown', date: '', note: 'Add the site plan, clearances, route, carrier handoffs, and charger locations.', fileId: null },
+      { id: 'source-demand', name: 'Demand and SKU profile', type: 'Demand / orders', status: 'Sample', date: '2026-10-18', note: '5,000 totes per day across both shifts. Peak demand is 1.2 times average hourly demand.', fileId: null },
+      { id: 'source-trial', name: 'Robot task performance', type: 'Benchmark / trial', status: 'Unknown', date: '', note: 'Ask AWS/OEM to define the test basis and the need for an initial physics study.', fileId: null }
+    ],
+    scenarios: [
+      { id: 'current', name: 'Current method', kind: 'manual', counts: {}, assignments: {}, manualFactor: 1 },
+      { id: 'improved', name: 'Improved manual method', kind: 'improved', counts: {}, assignments: {}, manualFactor: 0.85, extraUpfront: 5000 },
+      ...[2, 3, 4].map(count => ({ id: `humanoid-${count}`, name: `${count} humanoids + people`, kind: 'hybrid', counts: { 'humanoid-h1': count }, assignments: Object.fromEntries(actions.filter(a => ['reach', 'grip', 'lift', 'transport', 'orient', 'place'].includes(a.skill)).map(a => [a.id, 'humanoid-h1'])), manualFactor: 1 })),
+      { id: 'mixed', name: 'Arm cells + AMR + people', kind: 'hybrid', counts: { 'arm-a1': 2, 'amr-m1': 1 }, assignments: Object.fromEntries(actions.filter(a => ['reach', 'grip', 'lift', 'transport', 'orient', 'place'].includes(a.skill)).map(a => [a.id, a.skill === 'transport' ? 'amr-m1' : 'arm-a1'])), manualFactor: 1 }
+    ],
+    selectedScenarioId: 'humanoid-3',
+    decision: null,
+    deployment: { route: 'To be defined', target: 'AGIBOT model and tool pending', siteNotes: '', interfaceNotes: '', trainingNotes: '', pilotNotes: '', release: 'draft-0.1', rollback: '', supportOwner: '', checklist: {}, testResults: [], review: null, assets: [] },
+    observations: [], issues: [], answers: {}, history: []
+  };
+}
+
+function seedWorkspace() {
+  const tote = makeCase('Empty tote sorting', 'case-totes');
+  const kitting = makeCase('Parts kitting', 'case-kitting');
+  kitting.site = 'Ehmen · sample'; kitting.owner = 'Site engineering'; kitting.stage = 'Define';
+  kitting.baseline = { ...kitting.baseline, demandDaily: 1400, peoplePerShift: 3, salaryAnnual: 68000 };
+  kitting.actions.forEach(a => { a.name = a.name.replaceAll('tote', 'part').replace('sort point', 'kit station'); a.seconds *= 1.8; a.payloadKg = a.payloadKg ? 3 : 0; });
+  kitting.sources[0].note = 'Illustrative kit flow. This is a separate example, not the tote PoC.';
+  const transport = makeCase('Pallet transport', 'case-amr');
+  transport.site = 'Distribution site · sample'; transport.owner = 'Delivery team'; transport.stage = 'Pilot';
+  transport.baseline = { ...transport.baseline, demandDaily: 600, peoplePerShift: 2, minPeoplePerShift: 0, salaryAnnual: 60000 };
+  transport.actions = [
+    { ...transport.actions[0], id: 'pallet-check', name: 'Check the carrier', skill: 'inspect', seconds: 12, payloadKg: 0, dependency: '' },
+    { ...transport.actions[6], id: 'pallet-move', name: 'Transport the carrier', skill: 'transport', seconds: 80, payloadKg: 200, dependency: 'pallet-check' },
+    { ...transport.actions[9], id: 'pallet-confirm', name: 'Confirm the delivery', skill: 'confirm', seconds: 8, payloadKg: 0, dependency: 'pallet-move' }
+  ];
+  transport.scenarios = [{ id: 'current', name: 'Current method', kind: 'manual', counts: {}, assignments: {}, manualFactor: 1 }, { id: 'amr-pilot', name: 'One AMR + people', kind: 'hybrid', counts: { 'amr-m1': 1 }, assignments: { 'pallet-move': 'amr-m1' }, manualFactor: 1 }];
+  transport.selectedScenarioId = 'amr-pilot';
+  transport.deployment.assets = [{ id: 'demo-amr-01', name: 'AMR-01', configId: 'amr-m1', status: 'In pilot', serial: 'Sample asset', release: 'demo-0.1', note: 'Demonstration record. No live fleet connection.' }];
+  transport.deployment.pilotNotes = 'Sample plan: compare good moves, interventions, remaining human work, and cost. Define real acceptance limits before a field trial.';
+  return { schemaVersion: APP_SCHEMA, activeCaseId: tote.id, cases: [tote, kitting, transport], configs: seedConfigs(), savedAt: new Date().toISOString() };
+}
+
+const DEPLOY_CHECKS = [
+  ['scope', 'Confirm process and configuration', 'Name the exact work bundle, hardware, tool, software, and operating limits.'],
+  ['site', 'Prepare the work area', 'Check routes, clearances, buffers, power, charging, and shared work zones.'],
+  ['interfaces', 'Test the interfaces', 'Check dispatch, acknowledgement, duplicate events, timeout, retry, and recovery.'],
+  ['performance', 'Check task performance evidence', 'Use the agreed test basis. Record conditions, samples, failures, and transfer limits.'],
+  ['release', 'Check the release', 'Link the supported hardware, software/model, tests, and fallback version.'],
+  ['operators', 'Prepare operators and support', 'Assign supervision, training, recovery, maintenance, and support duties.'],
+  ['safety', 'Record the site safety review', 'The accountable site team must review the actual installation. A demo tick is not certification.'],
+  ['pilot', 'Agree the pilot measures and stop rules', 'Define output, quality, intervention, cost, duration, and stop conditions.']
 ];
 
-const TECHNOLOGY_LABELS = {
-  humanoid: "Humanoid",
-  amr: "AMR / mobile robot",
-  "robotic-forklift": "Robotic forklift",
-  "robotic-arm": "Robotic arm / cell",
-  vision: "Vision / scan / drone",
-  "warehouse-specialist": "Warehouse specialist"
-};
 
-const BASE_PARAMS = {
-  volumePerShift: 4200,
-  shiftHours: 10,
-  operatingShiftsDay: 2,
-  avgPayloadKg: 8,
-  travelMeters: 45,
-  complexity: 55,
-  variability: 50,
-  ergonomicsRisk: 58,
-  targetServiceLevel: 96,
-  humanUtilization: 80,
-  robotUtilization: 74,
-  autonomyTarget: 70,
-  cloudCostMonthly: 12000,
-  integrationCapex: 450000,
-  peakFactor: 1.25,
-  exceptionRate: 7,
-  layoutReadiness: 68,
-  wmsIntegration: 64,
-  safetyCriticality: 72,
-  skuVelocitySkew: 55,
-  dockDoorUtilization: 62,
-  productFragility: 38,
-  palletHeightCm: 150,
-  processStandardization: 60
-};
+/* engine.js */
+const MODEL_VERSION = 'planning-2.0.1';
+const finite = value => typeof value === 'number' && Number.isFinite(value);
+const round = (value, digits = 2) => finite(value) ? Number(value.toFixed(digits)) : null;
+const total = values => values.reduce((a, b) => a + b, 0);
 
-const REQ = { lift: 50, mobility: 65, dexterity: 60, vision: 72, endurance: 70, speed: 65, autonomy: 70, safety: 84, api: 72, scalability: 70 };
-
-function params(overrides = {}) {
-  return { ...BASE_PARAMS, ...overrides };
-}
-
-function req(overrides = {}) {
-  return { ...REQ, ...overrides };
-}
-
-function step(name, detail) {
-  return { name, detail };
-}
-
-const PROCESSES = [
-  {
-    id: "inbound-receiving",
-    name: "Inbound receiving and ASN validation",
-    category: "Inbound",
-    summary: "Robot-assisted receiving where cartons or pallets are scanned, counted, checked against ASN data, and staged for putaway or cross-dock.",
-    pilotFit: "Medium-high",
-    recommendedTech: ["vision", "amr", "humanoid", "robotic-forklift"],
-    recommendedMix: { vision: 30, amr: 30, humanoid: 20, "robotic-forklift": 20 },
-    defaultParams: params({ volumePerShift: 3500, avgPayloadKg: 9, travelMeters: 42, complexity: 50, variability: 54, ergonomicsRisk: 58, cloudCostMonthly: 10000, integrationCapex: 380000, exceptionRate: 6, wmsIntegration: 70, dockDoorUtilization: 72 }),
-    requirements: req({ lift: 56, mobility: 66, dexterity: 68, vision: 84, endurance: 66, speed: 62, autonomy: 67, safety: 85, api: 76, scalability: 72 }),
-    steps: [
-      step("Receive shipment", "Dock team or robot cell receives cartons, totes, or palletized freight."),
-      step("Scan ASN", "Barcode, OCR, or vision validates item identity against expected shipment."),
-      step("Count and inspect", "Shortage, overage, damage, and label exceptions are recorded."),
-      step("Stage for putaway", "Material is placed on cart, AMR, pallet jack, or buffer lane."),
-      step("Update WMS", "Inventory status, location, timestamp, and exception state are synchronized.")
-    ],
-    manual: { baseCycleSec: 62, errorRate: 1.5, injuryIndex: 60, throughputPerHour: 58 },
-    robot: { baseCycleSec: 68, errorRate: 0.65, improvementCeiling: 16, assistLaborRatio: 0.24 },
-    layoutPath: [{ x: 10, y: 14 }, { x: 18, y: 20 }, { x: 34, y: 26 }, { x: 52, y: 26 }, { x: 56, y: 50 }]
-  },
-  {
-    id: "putaway",
-    name: "Putaway and location confirmation",
-    category: "Inbound",
-    summary: "Movement from receiving buffers to reserve or forward pick locations, including location verification, scan confirmation, and exception handling.",
-    pilotFit: "High for AMR/forklift; medium for humanoid",
-    recommendedTech: ["amr", "robotic-forklift", "vision", "humanoid"],
-    recommendedMix: { amr: 38, "robotic-forklift": 32, vision: 18, humanoid: 12 },
-    defaultParams: params({ volumePerShift: 2800, avgPayloadKg: 14, travelMeters: 85, complexity: 46, variability: 42, ergonomicsRisk: 64, robotUtilization: 78, integrationCapex: 520000, skuVelocitySkew: 62, palletHeightCm: 165 }),
-    requirements: req({ lift: 70, mobility: 82, dexterity: 48, vision: 78, endurance: 82, speed: 76, autonomy: 76, safety: 88, api: 78, scalability: 78 }),
-    steps: [
-      step("Receive putaway task", "WMS assigns SKU, quantity, equipment class, and target storage location."),
-      step("Collect load", "Robot or worker collects tote, case, or pallet from receiving buffer."),
-      step("Navigate to location", "AMR/forklift follows approved traffic lane and yields to people."),
-      step("Confirm location", "Barcode, RFID, or vision validates slot and inventory status."),
-      step("Close task", "WMS updates stock location and readiness for replenishment or picking.")
-    ],
-    manual: { baseCycleSec: 95, errorRate: 1.2, injuryIndex: 70, throughputPerHour: 38 },
-    robot: { baseCycleSec: 82, errorRate: 0.6, improvementCeiling: 28, assistLaborRatio: 0.18 },
-    layoutPath: [{ x: 12, y: 18 }, { x: 28, y: 24 }, { x: 46, y: 18 }, { x: 64, y: 20 }, { x: 68, y: 48 }]
-  },
-  {
-    id: "case-picking",
-    name: "Case picking and tote replenishment",
-    category: "Outbound",
-    summary: "Hybrid picking where robots navigate human-designed aisles, identify cases, pick medium-weight cartons, scan labels, and hand off to tote, AMR, cart, or pack station.",
-    pilotFit: "High",
-    recommendedTech: ["amr", "humanoid", "vision", "robotic-arm"],
-    recommendedMix: { amr: 35, humanoid: 25, vision: 22, "robotic-arm": 18 },
-    defaultParams: params({ volumePerShift: 4200, avgPayloadKg: 8, travelMeters: 55, complexity: 58, variability: 46, ergonomicsRisk: 62, targetServiceLevel: 96, humanUtilization: 82, robotUtilization: 74, autonomyTarget: 70, integrationCapex: 450000, exceptionRate: 5, skuVelocitySkew: 68 }),
-    requirements: req({ lift: 52, mobility: 72, dexterity: 76, vision: 82, endurance: 68, speed: 66, autonomy: 70, safety: 84, api: 70, scalability: 74 }),
-    steps: [
-      step("Receive pick task", "WMS/WES releases pick task, priority, and carton handling instructions."),
-      step("Navigate aisle", "Robot or human moves from work queue to pick face through safe lanes."),
-      step("Identify SKU", "Vision and barcode checks confirm location, SKU, and quantity."),
-      step("Pick carton", "Item is lifted within payload range and placed on tote, AMR, or cart."),
-      step("Scan and confirm", "Barcode or visual confirmation closes the transaction."),
-      step("Deliver to pack", "Material moves to pack station or downstream handoff point.")
-    ],
-    manual: { baseCycleSec: 72, errorRate: 1.3, injuryIndex: 68, throughputPerHour: 50 },
-    robot: { baseCycleSec: 78, errorRate: 0.8, improvementCeiling: 20, assistLaborRatio: 0.22 },
-    layoutPath: [{ x: 15, y: 15 }, { x: 42, y: 20 }, { x: 63, y: 30 }, { x: 83, y: 24 }, { x: 83, y: 48 }, { x: 64, y: 63 }]
-  },
-  {
-    id: "piece-picking",
-    name: "Piece picking / e-commerce order picking",
-    category: "Outbound",
-    summary: "High-SKU piece picking with small items, high variability, scanning, tote handling, and frequent exception decisions.",
-    pilotFit: "Medium; use robotic arms or goods-to-person first where possible",
-    recommendedTech: ["robotic-arm", "vision", "amr", "humanoid"],
-    recommendedMix: { "robotic-arm": 34, vision: 26, amr: 24, humanoid: 16 },
-    defaultParams: params({ volumePerShift: 9500, avgPayloadKg: 1.2, travelMeters: 62, complexity: 74, variability: 82, ergonomicsRisk: 42, targetServiceLevel: 98, robotUtilization: 70, autonomyTarget: 78, integrationCapex: 680000, exceptionRate: 12, productFragility: 50, skuVelocitySkew: 78 }),
-    requirements: req({ lift: 22, mobility: 70, dexterity: 92, vision: 94, endurance: 70, speed: 76, autonomy: 82, safety: 84, api: 84, scalability: 76 }),
-    steps: [
-      step("Release batch", "Order lines are grouped by zone, promise time, and item class."),
-      step("Locate item", "Vision or barcode validates bin, SKU, and quantity."),
-      step("Pick piece", "Dexterous robot or human handles small item and places into tote."),
-      step("Exception decision", "Fragile, missing, or mixed-bin exceptions are routed to operator."),
-      step("Induct to pack", "Completed tote flows to packing or sortation.")
-    ],
-    manual: { baseCycleSec: 26, errorRate: 2.4, injuryIndex: 40, throughputPerHour: 138 },
-    robot: { baseCycleSec: 31, errorRate: 0.9, improvementCeiling: 25, assistLaborRatio: 0.32 },
-    layoutPath: [{ x: 20, y: 18 }, { x: 42, y: 16 }, { x: 64, y: 18 }, { x: 82, y: 24 }, { x: 86, y: 50 }, { x: 72, y: 64 }]
-  },
-  {
-    id: "g2p-replenishment",
-    name: "Goods-to-person replenishment and tote movement",
-    category: "Internal transport",
-    summary: "AMR-led movement of totes, carts, or racks between storage, pick, pack, and replenishment zones with scan validation and exception support.",
-    pilotFit: "High",
-    recommendedTech: ["amr", "vision", "humanoid"],
-    recommendedMix: { amr: 58, vision: 25, humanoid: 17 },
-    defaultParams: params({ volumePerShift: 7600, avgPayloadKg: 18, travelMeters: 75, complexity: 44, variability: 38, ergonomicsRisk: 66, targetServiceLevel: 97, robotUtilization: 82, integrationCapex: 480000, processStandardization: 78 }),
-    requirements: req({ lift: 62, mobility: 88, dexterity: 34, vision: 74, endurance: 88, speed: 88, autonomy: 84, safety: 88, api: 84, scalability: 88 }),
-    steps: [
-      step("Call replenishment", "WMS/WES triggers tote, cart, or rack move based on demand signal."),
-      step("Assign AMR", "Fleet manager selects nearest available robot and safe route."),
-      step("Load or dock", "AMR docks with cart, tote rack, or load transfer point."),
-      step("Transport", "AMR moves through warehouse lanes with traffic management."),
-      step("Handoff", "Station receives item and closes task in WMS/WES.")
-    ],
-    manual: { baseCycleSec: 86, errorRate: 0.9, injuryIndex: 65, throughputPerHour: 42 },
-    robot: { baseCycleSec: 58, errorRate: 0.4, improvementCeiling: 42, assistLaborRatio: 0.1 },
-    layoutPath: [{ x: 14, y: 18 }, { x: 30, y: 18 }, { x: 48, y: 34 }, { x: 68, y: 44 }, { x: 86, y: 48 }]
-  },
-  {
-    id: "packing-qc",
-    name: "Packing quality check and documentation",
-    category: "Outbound",
-    summary: "Vision-enabled packing validation for item, label, weight, compliance document, carton selection, photo proof, and exception routing.",
-    pilotFit: "Medium-high",
-    recommendedTech: ["vision", "robotic-arm", "humanoid"],
-    recommendedMix: { vision: 45, "robotic-arm": 35, humanoid: 20 },
-    defaultParams: params({ volumePerShift: 5200, avgPayloadKg: 3, travelMeters: 12, complexity: 56, variability: 48, ergonomicsRisk: 36, targetServiceLevel: 97, humanUtilization: 84, robotUtilization: 72, autonomyTarget: 74, cloudCostMonthly: 9500, integrationCapex: 350000, productFragility: 55, exceptionRate: 8, wmsIntegration: 82 }),
-    requirements: req({ lift: 26, mobility: 42, dexterity: 76, vision: 88, endurance: 68, speed: 72, autonomy: 74, safety: 84, api: 82, scalability: 78 }),
-    steps: [
-      step("Receive pack task", "Pack station receives order, box rules, label rules, and compliance flags."),
-      step("Verify carton", "Vision/weight checks item, carton, label, and dunnage compliance."),
-      step("Assist placement", "Robot arm or humanoid supports light placement and label handling where feasible."),
-      step("Resolve exception", "Mismatch, damage, or paperwork issue routes to operator."),
-      step("Ship confirm", "Shipment is closed and auditable image/KPI trace is saved.")
-    ],
-    manual: { baseCycleSec: 25, errorRate: 1.7, injuryIndex: 33, throughputPerHour: 144 },
-    robot: { baseCycleSec: 23, errorRate: 0.35, improvementCeiling: 32, assistLaborRatio: 0.18 },
-    layoutPath: [{ x: 78, y: 48 }, { x: 86, y: 48 }, { x: 88, y: 56 }, { x: 66, y: 64 }, { x: 50, y: 62 }]
-  },
-  {
-    id: "cross-dock-sort",
-    name: "Cross-dock sort and transfer",
-    category: "Cross dock",
-    summary: "High-speed inbound-to-outbound transfer with scanning, routing, cart movement, AMR transfer, and exception handling.",
-    pilotFit: "Medium-high",
-    recommendedTech: ["amr", "vision", "humanoid", "robotic-forklift"],
-    recommendedMix: { amr: 40, vision: 28, humanoid: 17, "robotic-forklift": 15 },
-    defaultParams: params({ volumePerShift: 6400, avgPayloadKg: 7, travelMeters: 36, complexity: 52, variability: 60, ergonomicsRisk: 60, targetServiceLevel: 98, humanUtilization: 83, robotUtilization: 72, autonomyTarget: 72, cloudCostMonthly: 12000, integrationCapex: 520000, peakFactor: 1.45, dockDoorUtilization: 84, exceptionRate: 6 }),
-    requirements: req({ lift: 48, mobility: 76, dexterity: 62, vision: 84, endurance: 76, speed: 78, autonomy: 78, safety: 88, api: 82, scalability: 80 }),
-    steps: [
-      step("Induct freight", "Item arrives at sort face or receiving lane."),
-      step("Scan and route", "Destination lane is calculated using WMS/WES data."),
-      step("Move item", "Robot/human moves case, tote, or pallet to correct lane."),
-      step("Handoff", "Outbound staging confirms transfer and load sequence."),
-      step("Close exception", "Unscannable, damaged, or wrong-destination freight is escalated.")
-    ],
-    manual: { baseCycleSec: 34, errorRate: 1.1, injuryIndex: 62, throughputPerHour: 106 },
-    robot: { baseCycleSec: 34, errorRate: 0.55, improvementCeiling: 22, assistLaborRatio: 0.2 },
-    layoutPath: [{ x: 12, y: 18 }, { x: 32, y: 32 }, { x: 52, y: 48 }, { x: 70, y: 60 }, { x: 86, y: 62 }]
-  },
-  {
-    id: "container-unloading",
-    name: "Container and trailer unloading",
-    category: "Inbound",
-    summary: "Dense, variable, physically demanding unloading. The recommended core technology is usually specialist case-handling robotics with humanoids for exceptions only.",
-    pilotFit: "Specialist robot first",
-    recommendedTech: ["warehouse-specialist", "robotic-arm", "vision", "humanoid"],
-    recommendedMix: { "warehouse-specialist": 45, "robotic-arm": 25, vision: 20, humanoid: 10 },
-    defaultParams: params({ volumePerShift: 7800, avgPayloadKg: 13, travelMeters: 24, complexity: 64, variability: 76, ergonomicsRisk: 88, targetServiceLevel: 94, humanUtilization: 76, robotUtilization: 78, autonomyTarget: 76, cloudCostMonthly: 15000, integrationCapex: 700000, exceptionRate: 10, safetyCriticality: 90, dockDoorUtilization: 88 }),
-    requirements: req({ lift: 76, mobility: 58, dexterity: 62, vision: 86, endurance: 78, speed: 82, autonomy: 80, safety: 88, api: 72, scalability: 70 }),
-    steps: [
-      step("Map case wall", "Vision system maps cartons, voids, crush risk, and safe grasp sequence."),
-      step("Pick case", "Specialist robot or worker removes a case from the wall."),
-      step("Place to conveyor", "Case is placed on downstream conveyor, AMR, or receiving buffer."),
-      step("Manage exceptions", "Damaged, unstable, heavy, or irregular items are routed to human exception handling."),
-      step("Clear trailer", "System records trailer completion, door time, and dock productivity.")
-    ],
-    manual: { baseCycleSec: 13, errorRate: 0.9, injuryIndex: 94, throughputPerHour: 270 },
-    robot: { baseCycleSec: 8, errorRate: 0.55, improvementCeiling: 38, assistLaborRatio: 0.14 },
-    layoutPath: [{ x: 6, y: 10 }, { x: 13, y: 16 }, { x: 22, y: 18 }, { x: 34, y: 20 }, { x: 48, y: 23 }]
-  },
-  {
-    id: "truck-loading",
-    name: "Truck loading and route staging",
-    category: "Outbound",
-    summary: "Outbound staging, sequence verification, pallet movement, and trailer loading support for route, dock, customer, and carrier requirements.",
-    pilotFit: "High for robotic forklift/AMR; humanoid exception support",
-    recommendedTech: ["robotic-forklift", "amr", "vision", "humanoid"],
-    recommendedMix: { "robotic-forklift": 45, amr: 28, vision: 17, humanoid: 10 },
-    defaultParams: params({ volumePerShift: 3200, avgPayloadKg: 20, travelMeters: 70, complexity: 52, variability: 42, ergonomicsRisk: 82, targetServiceLevel: 97, robotUtilization: 78, integrationCapex: 620000, dockDoorUtilization: 86, palletHeightCm: 170, safetyCriticality: 88 }),
-    requirements: req({ lift: 84, mobility: 82, dexterity: 42, vision: 80, endurance: 84, speed: 80, autonomy: 82, safety: 92, api: 78, scalability: 78 }),
-    steps: [
-      step("Create load plan", "Route sequence and trailer utilization plan are released."),
-      step("Stage freight", "Pallets, carts, or roll cages move to door buffer in sequence."),
-      step("Verify load", "Vision/barcode confirms route, customer, temperature or hazmat flags."),
-      step("Load trailer", "Forklift robot or operator loads according to safe pattern."),
-      step("Close door", "Carrier handoff, manifest, and departure timestamp are confirmed.")
-    ],
-    manual: { baseCycleSec: 75, errorRate: 1.0, injuryIndex: 86, throughputPerHour: 48 },
-    robot: { baseCycleSec: 60, errorRate: 0.45, improvementCeiling: 35, assistLaborRatio: 0.16 },
-    layoutPath: [{ x: 58, y: 48 }, { x: 66, y: 58 }, { x: 78, y: 64 }, { x: 88, y: 70 }, { x: 96, y: 69 }]
-  },
-  {
-    id: "palletizing",
-    name: "Palletizing and depalletizing support",
-    category: "Outbound",
-    summary: "High-repetition stacking/destacking. Fixed or mobile robotic cells generally outperform humanoids where the environment can be engineered.",
-    pilotFit: "Specialist robot first",
-    recommendedTech: ["robotic-arm", "warehouse-specialist", "vision", "humanoid"],
-    recommendedMix: { "robotic-arm": 48, "warehouse-specialist": 22, vision: 20, humanoid: 10 },
-    defaultParams: params({ volumePerShift: 5000, avgPayloadKg: 11, travelMeters: 10, complexity: 48, variability: 58, ergonomicsRisk: 82, targetServiceLevel: 96, humanUtilization: 78, robotUtilization: 80, autonomyTarget: 74, cloudCostMonthly: 10000, integrationCapex: 620000, palletHeightCm: 175, processStandardization: 72 }),
-    requirements: req({ lift: 72, mobility: 40, dexterity: 62, vision: 78, endurance: 80, speed: 78, autonomy: 76, safety: 90, api: 72, scalability: 78 }),
-    steps: [
-      step("Read stack pattern", "Stacking or destacking plan loads from WMS/WES."),
-      step("Identify case", "Vision validates carton size, weight class, and orientation."),
-      step("Pick and place", "Robot cell or worker places case into stable layer pattern."),
-      step("Wrap or handoff", "Pallet moves to wrapper, staging, or outbound lane."),
-      step("Confirm pallet", "Pallet ID, height, weight, and destination are confirmed.")
-    ],
-    manual: { baseCycleSec: 12, errorRate: 0.8, injuryIndex: 88, throughputPerHour: 300 },
-    robot: { baseCycleSec: 9, errorRate: 0.35, improvementCeiling: 34, assistLaborRatio: 0.12 },
-    layoutPath: [{ x: 70, y: 54 }, { x: 80, y: 50 }, { x: 88, y: 58 }, { x: 68, y: 64 }, { x: 52, y: 62 }]
-  },
-  {
-    id: "pallet-movement",
-    name: "Pallet movement and autonomous forklift transport",
-    category: "Internal transport",
-    summary: "Robotic forklifts and AMRs move pallets between receiving, storage, production buffers, staging, and outbound docks with traffic safety controls.",
-    pilotFit: "High",
-    recommendedTech: ["robotic-forklift", "vision", "amr"],
-    recommendedMix: { "robotic-forklift": 62, vision: 22, amr: 16 },
-    defaultParams: params({ volumePerShift: 2600, avgPayloadKg: 24, travelMeters: 95, complexity: 40, variability: 32, ergonomicsRisk: 86, targetServiceLevel: 97, robotUtilization: 82, integrationCapex: 680000, layoutReadiness: 74, safetyCriticality: 92, palletHeightCm: 180 }),
-    requirements: req({ lift: 92, mobility: 88, dexterity: 30, vision: 76, endurance: 88, speed: 84, autonomy: 84, safety: 94, api: 80, scalability: 80 }),
-    steps: [
-      step("Release move task", "WMS/WES assigns pallet ID, source, destination, priority, and equipment class."),
-      step("Approach pallet", "Forklift robot validates pallet pose and path."),
-      step("Lift and transport", "Pallet moves through approved traffic lanes."),
-      step("Drop and confirm", "Destination slot or lane is confirmed by barcode/vision."),
-      step("Report telemetry", "Battery, utilization, safety events, and task completion are logged.")
-    ],
-    manual: { baseCycleSec: 110, errorRate: 0.8, injuryIndex: 90, throughputPerHour: 33 },
-    robot: { baseCycleSec: 82, errorRate: 0.35, improvementCeiling: 40, assistLaborRatio: 0.1 },
-    layoutPath: [{ x: 8, y: 18 }, { x: 24, y: 28 }, { x: 42, y: 42 }, { x: 66, y: 56 }, { x: 88, y: 66 }]
-  },
-  {
-    id: "inventory-count",
-    name: "Cycle count and inventory inspection",
-    category: "Inventory",
-    summary: "Autonomous scan, visual count, shelf read, or drone-based audit that flags discrepancies and creates an auditable inventory trail.",
-    pilotFit: "High",
-    recommendedTech: ["vision", "amr", "humanoid"],
-    recommendedMix: { vision: 50, amr: 38, humanoid: 12 },
-    defaultParams: params({ volumePerShift: 9000, avgPayloadKg: 2, travelMeters: 80, complexity: 42, variability: 36, ergonomicsRisk: 45, targetServiceLevel: 98, humanUtilization: 78, robotUtilization: 82, autonomyTarget: 78, cloudCostMonthly: 9000, integrationCapex: 280000, exceptionRate: 4, wmsIntegration: 86, processStandardization: 80 }),
-    requirements: req({ lift: 18, mobility: 76, dexterity: 42, vision: 92, endurance: 78, speed: 70, autonomy: 82, safety: 86, api: 86, scalability: 82 }),
-    steps: [
-      step("Load count plan", "WMS releases count zones, priority SKUs, and audit rules."),
-      step("Navigate zone", "Robot moves aisle by aisle following safe paths."),
-      step("Scan labels", "Vision, barcode, RFID, or drone imagery confirms SKU and location."),
-      step("Flag exception", "Mismatch, empty slot, or damaged label is logged."),
-      step("Publish report", "Inventory accuracy dashboard updates with photo and transaction trace.")
-    ],
-    manual: { baseCycleSec: 18, errorRate: 2.2, injuryIndex: 38, throughputPerHour: 200 },
-    robot: { baseCycleSec: 13, errorRate: 0.45, improvementCeiling: 48, assistLaborRatio: 0.12 },
-    layoutPath: [{ x: 16, y: 14 }, { x: 34, y: 12 }, { x: 66, y: 14 }, { x: 66, y: 48 }, { x: 34, y: 50 }, { x: 20, y: 62 }]
-  },
-  {
-    id: "returns-processing",
-    name: "Returns intake and exception handling",
-    category: "Reverse logistics",
-    summary: "Variable returns flow including scanning, visual inspection, grading, disposition decision, light manipulation, and staging.",
-    pilotFit: "Medium",
-    recommendedTech: ["vision", "humanoid", "robotic-arm", "amr"],
-    recommendedMix: { vision: 38, humanoid: 26, "robotic-arm": 22, amr: 14 },
-    defaultParams: params({ volumePerShift: 2600, shiftHours: 8, avgPayloadKg: 4, travelMeters: 18, complexity: 76, variability: 84, ergonomicsRisk: 42, targetServiceLevel: 94, humanUtilization: 76, robotUtilization: 64, autonomyTarget: 65, cloudCostMonthly: 11000, integrationCapex: 420000, exceptionRate: 18, productFragility: 68 }),
-    requirements: req({ lift: 34, mobility: 52, dexterity: 88, vision: 92, endurance: 58, speed: 48, autonomy: 66, safety: 82, api: 80, scalability: 62 }),
-    steps: [
-      step("Receive return", "Returned item is inducted with customer and order context."),
-      step("Identify item", "Vision and barcode validate item, order, serial, and packaging."),
-      step("Inspect condition", "Robot supports photo evidence, defect recognition, and grading."),
-      step("Sort disposition", "Return is routed to restock, repair, recycle, quarantine, or vendor claim."),
-      step("Close transaction", "WMS/OMS updates inventory, refund state, and customer status.")
-    ],
-    manual: { baseCycleSec: 58, errorRate: 2.8, injuryIndex: 42, throughputPerHour: 62 },
-    robot: { baseCycleSec: 66, errorRate: 1.2, improvementCeiling: 16, assistLaborRatio: 0.36 },
-    layoutPath: [{ x: 54, y: 64 }, { x: 76, y: 52 }, { x: 85, y: 45 }, { x: 78, y: 28 }, { x: 54, y: 24 }]
-  },
-  {
-    id: "kitting-vas",
-    name: "Kitting and value-added services",
-    category: "VAS",
-    summary: "Assembly-like value-added services such as kitting, relabeling, bundle creation, light assembly, documentation, and quality verification.",
-    pilotFit: "Medium; high when work instructions are standardized",
-    recommendedTech: ["humanoid", "robotic-arm", "vision", "amr"],
-    recommendedMix: { humanoid: 30, "robotic-arm": 30, vision: 25, amr: 15 },
-    defaultParams: params({ volumePerShift: 1800, avgPayloadKg: 3, travelMeters: 20, complexity: 80, variability: 62, ergonomicsRisk: 44, targetServiceLevel: 97, robotUtilization: 64, integrationCapex: 540000, exceptionRate: 14, productFragility: 72, processStandardization: 54 }),
-    requirements: req({ lift: 28, mobility: 45, dexterity: 92, vision: 88, endurance: 62, speed: 54, autonomy: 70, safety: 84, api: 82, scalability: 66 }),
-    steps: [
-      step("Load work instruction", "Digital SOP defines kit components, order, label, and QA rules."),
-      step("Pick components", "Robot or human selects components from bins or presented totes."),
-      step("Assemble kit", "Components are placed, labeled, bundled, or lightly assembled."),
-      step("Verify quality", "Vision verifies content, label, count, and photo proof."),
-      step("Release to pack", "Completed kit enters finished goods or outbound flow.")
-    ],
-    manual: { baseCycleSec: 92, errorRate: 2.3, injuryIndex: 36, throughputPerHour: 39 },
-    robot: { baseCycleSec: 105, errorRate: 0.9, improvementCeiling: 12, assistLaborRatio: 0.42 },
-    layoutPath: [{ x: 76, y: 44 }, { x: 82, y: 42 }, { x: 84, y: 54 }, { x: 74, y: 62 }, { x: 54, y: 62 }]
-  },
-  {
-    id: "sorter-induction",
-    name: "Sorter induction and parcel singulation",
-    category: "Sortation",
-    summary: "High-speed parcel or carton induction, singulation, scan validation, and sort line feed with robotic arm and vision support.",
-    pilotFit: "Specialist robot first",
-    recommendedTech: ["robotic-arm", "vision", "warehouse-specialist", "amr"],
-    recommendedMix: { "robotic-arm": 40, vision: 30, "warehouse-specialist": 20, amr: 10 },
-    defaultParams: params({ volumePerShift: 11500, avgPayloadKg: 4, travelMeters: 8, complexity: 54, variability: 68, ergonomicsRisk: 66, targetServiceLevel: 98, robotUtilization: 84, integrationCapex: 760000, peakFactor: 1.55, exceptionRate: 8, wmsIntegration: 84 }),
-    requirements: req({ lift: 42, mobility: 30, dexterity: 72, vision: 92, endurance: 84, speed: 94, autonomy: 84, safety: 88, api: 86, scalability: 84 }),
-    steps: [
-      step("Feed parcels", "Items arrive from receiving, chute, or bulk container."),
-      step("Singulate", "Vision separates items and determines grasp/induction sequence."),
-      step("Scan", "Barcode/OCR reads parcel identity and route."),
-      step("Induct", "Robot arm or operator places item onto sorter or conveyor."),
-      step("Handle reject", "Unreadable, oversized, or damaged parcels go to exception lane.")
-    ],
-    manual: { baseCycleSec: 6, errorRate: 1.0, injuryIndex: 68, throughputPerHour: 600 },
-    robot: { baseCycleSec: 4.7, errorRate: 0.35, improvementCeiling: 38, assistLaborRatio: 0.08 },
-    layoutPath: [{ x: 22, y: 56 }, { x: 38, y: 58 }, { x: 56, y: 60 }, { x: 74, y: 62 }, { x: 92, y: 62 }]
-  },
-  {
-    id: "yard-dock-inspection",
-    name: "Yard, dock-door and safety inspection",
-    category: "Inspection",
-    summary: "Autonomous inspection of dock doors, staging lanes, yard positions, trailer seals, safety compliance, congestion, and inventory visibility.",
-    pilotFit: "High",
-    recommendedTech: ["vision", "amr", "humanoid"],
-    recommendedMix: { vision: 60, amr: 28, humanoid: 12 },
-    defaultParams: params({ volumePerShift: 4500, avgPayloadKg: 1, travelMeters: 110, complexity: 38, variability: 44, ergonomicsRisk: 34, targetServiceLevel: 98, robotUtilization: 86, integrationCapex: 260000, dockDoorUtilization: 90, safetyCriticality: 86, wmsIntegration: 78 }),
-    requirements: req({ lift: 8, mobility: 88, dexterity: 22, vision: 94, endurance: 90, speed: 78, autonomy: 86, safety: 88, api: 82, scalability: 86 }),
-    steps: [
-      step("Load inspection route", "System creates route by dock, yard bay, or safety zone."),
-      step("Navigate route", "Robot, AMR, or drone inspects locations without disrupting operations."),
-      step("Capture evidence", "Image, barcode, seal, trailer, and lane state are recorded."),
-      step("Detect exception", "Congestion, open door, wrong trailer, missing pallet, or unsafe condition is flagged."),
-      step("Publish dashboard", "Supervisor receives exception heatmap and audit log.")
-    ],
-    manual: { baseCycleSec: 44, errorRate: 1.8, injuryIndex: 34, throughputPerHour: 82 },
-    robot: { baseCycleSec: 30, errorRate: 0.35, improvementCeiling: 45, assistLaborRatio: 0.1 },
-    layoutPath: [{ x: 8, y: 8 }, { x: 8, y: 24 }, { x: 22, y: 42 }, { x: 52, y: 66 }, { x: 92, y: 69 }]
+function fitAction(action, config) {
+  const checks = [];
+  if (!config) return { status: 'unknown', checks: [{ name: 'Configuration', status: 'unknown', detail: 'Configuration is missing.' }] };
+  checks.push({ name: 'Skill', status: config.skills?.includes(action.skill) ? 'fit' : 'blocked', detail: `${action.skill}: ${config.skills?.includes(action.skill) ? 'included in this record' : 'not included'}` });
+  for (const [label, need, available, direction, unit] of [
+    ['Payload', action.payloadKg, config.payloadKg, 'minimum', 'kg'],
+    ['Reach', action.reachM, config.reachM, 'minimum', 'm'],
+    ['Aisle', action.aisleM, config.minAisleM, 'space', 'm']
+  ]) {
+    if (need === 0 && label !== 'Aisle') continue;
+    let status = 'unknown';
+    if (finite(need) && finite(available) && need >= 0 && available >= 0) status = (direction === 'space' ? need >= available : available >= need) ? 'fit' : 'blocked';
+    checks.push({ name: label, status, detail: `Need ${need ?? 'unknown'} ${unit}; record ${available ?? 'unknown'} ${unit}.` });
   }
-];
+  const time = config.times?.[action.skill];
+  checks.push({ name: 'Task time', status: finite(time) && time > 0 ? 'fit' : 'unknown', detail: finite(time) && time > 0 ? `${time} seconds per action, before retries.` : 'No task time is available.' });
+  return { status: checks.some(c => c.status === 'blocked') ? 'blocked' : checks.some(c => c.status === 'unknown') ? 'unknown' : 'fit', checks, source: config.source, note: 'Fit to the recorded inputs only. This is not site validation.' };
+}
 
-function buildCustomProcess(custom = {}) {
-  const steps = Array.isArray(custom.steps) && custom.steps.length
-    ? custom.steps.map((item, index) => typeof item === "string" ? step(`Step ${index + 1}`, item) : step(item.name || `Step ${index + 1}`, item.detail || "Custom workflow activity"))
-    : [
-      step("Receive work order", "Work instruction is released from WMS/WES or uploaded process flow."),
-      step("Execute activity", "Human, robot, or combined team performs the configured task."),
-      step("Validate output", "Scan, vision, or supervisor check confirms quality and service level."),
-      step("Close transaction", "System updates inventory, labor, robot telemetry, and KPI dashboard.")
-    ];
-
-  return {
-    id: "custom-process",
-    name: custom.name || "Custom process flow",
-    category: custom.category || "Custom",
-    summary: custom.summary || "User-defined 3PL process created from operational knowledge, uploaded process flow, engineering model, or material flow file.",
-    pilotFit: custom.pilotFit || "To be validated",
-    recommendedTech: custom.recommendedTech || ["amr", "vision", "humanoid", "robotic-arm", "robotic-forklift"],
-    recommendedMix: custom.recommendedMix || { amr: 28, vision: 24, humanoid: 20, "robotic-arm": 16, "robotic-forklift": 12 },
-    defaultParams: params(custom.defaultParams || { complexity: 60, variability: 60, processStandardization: 45, integrationCapex: 500000 }),
-    requirements: req(custom.requirements || { lift: 50, mobility: 65, dexterity: 62, vision: 78, endurance: 68, speed: 64, autonomy: 70, safety: 86, api: 74, scalability: 68 }),
-    steps,
-    manual: custom.manual || { baseCycleSec: 60, errorRate: 1.5, injuryIndex: 55, throughputPerHour: 60 },
-    robot: custom.robot || { baseCycleSec: 64, errorRate: 0.8, improvementCeiling: 18, assistLaborRatio: 0.25 },
-    layoutPath: custom.layoutPath || [{ x: 12, y: 18 }, { x: 30, y: 28 }, { x: 48, y: 38 }, { x: 70, y: 50 }, { x: 88, y: 62 }]
+function validateCase(c) {
+  const errors = [];
+  const bounds = {
+    'baseline.demandDaily': [0, 1e8], 'baseline.peakFactor': [1, 20], 'baseline.shifts': [1, 6], 'baseline.shiftHours': [0.1, 24], 'baseline.daysYear': [1, 366], 'baseline.peoplePerShift': [0, 10000], 'baseline.humanUtilPct': [1, 100], 'baseline.salaryAnnual': [0, 1e7], 'baseline.minPeoplePerShift': [0, 10000], 'baseline.staffingCover': [1, 5], 'baseline.qualityTargetPct': [0, 100],
+    'economics.integration': [0, 1e10], 'economics.siteChanges': [0, 1e10], 'economics.softwareAnnual': [0, 1e10], 'economics.supportAnnual': [0, 1e10], 'economics.rampMonths': [0, 12], 'economics.horizonYears': [1, 20], 'economics.discountPct': [0, 100], 'economics.retainedPct': [0, 100], 'economics.cashableFte': [0, 10000], 'economics.residualValue': [0, 1e10], 'economics.otherBenefitAnnual': [0, 1e10], 'economics.handoffSec': [0, 10000]
   };
-}
-
-const ROBOTS = [
-  {
-    id: "agility-digit",
-    name: "Agility Robotics Digit",
-    company: "Agility Robotics",
-    technology: "humanoid",
-    typeLabel: "Humanoid logistics worker",
-    deployment: ["RaaS", "Lease", "Pilot to scale"],
-    payloadKg: 16,
-    enduranceHours: 4,
-    speedMps: 1.5,
-    capabilities: { lift: 62, mobility: 84, dexterity: 64, vision: 78, endurance: 72, speed: 72, autonomy: 76, safety: 82, api: 80, scalability: 82 },
-    readiness: 78,
-    commercialMaturity: 78,
-    maintenance: 72,
-    raasMonthlyUsd: 9500,
-    leaseMonthlyUsd: 7400,
-    purchaseUsd: 260000,
-    integrationComplexity: 58,
-    bestFor: ["case-picking", "inbound-receiving", "cross-dock-sort", "g2p-replenishment"],
-    caution: "Strong for human-scale logistics movement and tote/cart workflows; payload and dexterity still limit heavy or highly variable manipulation."
-  },
-  {
-    id: "apptronik-apollo",
-    name: "Apptronik Apollo",
-    company: "Apptronik",
-    technology: "humanoid",
-    typeLabel: "General-purpose industrial humanoid",
-    deployment: ["Pilot", "Lease", "Managed deployment"],
-    payloadKg: 25,
-    enduranceHours: 4,
-    speedMps: 1.3,
-    capabilities: { lift: 76, mobility: 76, dexterity: 72, vision: 78, endurance: 72, speed: 66, autonomy: 70, safety: 84, api: 74, scalability: 72 },
-    readiness: 72,
-    commercialMaturity: 68,
-    maintenance: 68,
-    raasMonthlyUsd: 10500,
-    leaseMonthlyUsd: 8200,
-    purchaseUsd: 290000,
-    integrationComplexity: 62,
-    bestFor: ["inbound-receiving", "case-picking", "palletizing", "kitting-vas"],
-    caution: "Promising higher-payload humanoid for industrial environments; validate duty cycle, spare parts, and support model before scaling."
-  },
-  {
-    id: "figure-03",
-    name: "Figure AI Figure 02/03",
-    company: "Figure AI",
-    technology: "humanoid",
-    typeLabel: "AI-enabled humanoid",
-    deployment: ["Strategic pilot", "OEM partnership"],
-    payloadKg: 20,
-    enduranceHours: 5,
-    speedMps: 1.2,
-    capabilities: { lift: 70, mobility: 74, dexterity: 82, vision: 84, endurance: 76, speed: 62, autonomy: 82, safety: 78, api: 66, scalability: 70 },
-    readiness: 74,
-    commercialMaturity: 62,
-    maintenance: 64,
-    raasMonthlyUsd: 12000,
-    leaseMonthlyUsd: 9400,
-    purchaseUsd: 320000,
-    integrationComplexity: 70,
-    bestFor: ["packing-qc", "returns-processing", "case-picking", "piece-picking"],
-    caution: "Strong manipulation and AI positioning; logistics commercial terms and open integration model should be validated."
-  },
-  {
-    id: "ubtech-walker-s",
-    name: "UBTECH Walker S / S1",
-    company: "UBTECH Robotics",
-    technology: "humanoid",
-    typeLabel: "Industrial humanoid",
-    deployment: ["Pilot", "Factory automation partnership"],
-    payloadKg: 10,
-    enduranceHours: 2,
-    speedMps: 0.5,
-    capabilities: { lift: 48, mobility: 66, dexterity: 72, vision: 82, endurance: 48, speed: 42, autonomy: 72, safety: 80, api: 70, scalability: 70 },
-    readiness: 70,
-    commercialMaturity: 66,
-    maintenance: 62,
-    raasMonthlyUsd: 9000,
-    leaseMonthlyUsd: 7000,
-    purchaseUsd: 230000,
-    integrationComplexity: 64,
-    bestFor: ["packing-qc", "inventory-count", "inbound-receiving"],
-    caution: "Better fit for controlled inspection and factory-line tasks than long-distance, high-speed warehouse movement."
-  },
-  {
-    id: "sanctuary-phoenix",
-    name: "Sanctuary AI Phoenix",
-    company: "Sanctuary AI",
-    technology: "humanoid",
-    typeLabel: "Dexterous humanoid worker",
-    deployment: ["Pilot", "Task-learning partnership"],
-    payloadKg: 12,
-    enduranceHours: 3,
-    speedMps: 0.9,
-    capabilities: { lift: 52, mobility: 58, dexterity: 90, vision: 84, endurance: 58, speed: 48, autonomy: 80, safety: 78, api: 66, scalability: 58 },
-    readiness: 66,
-    commercialMaturity: 58,
-    maintenance: 58,
-    raasMonthlyUsd: 11000,
-    leaseMonthlyUsd: 8500,
-    purchaseUsd: 280000,
-    integrationComplexity: 72,
-    bestFor: ["returns-processing", "packing-qc", "kitting-vas"],
-    caution: "Potentially strong for dexterous task learning; less obvious fit for high-throughput movement without controlled pilots."
-  },
-  {
-    id: "unitree-g1",
-    name: "Unitree G1 / H1",
-    company: "Unitree Robotics",
-    technology: "humanoid",
-    typeLabel: "Research and development humanoid",
-    deployment: ["R&D", "Proof of concept"],
-    payloadKg: 3,
-    enduranceHours: 2,
-    speedMps: 1.4,
-    capabilities: { lift: 24, mobility: 76, dexterity: 64, vision: 62, endurance: 46, speed: 68, autonomy: 48, safety: 62, api: 72, scalability: 64 },
-    readiness: 50,
-    commercialMaturity: 46,
-    maintenance: 56,
-    raasMonthlyUsd: 3500,
-    leaseMonthlyUsd: 2500,
-    purchaseUsd: 65000,
-    integrationComplexity: 58,
-    bestFor: ["inventory-count", "yard-dock-inspection"],
-    caution: "Low cost and agile platform, but not a default 3PL worker for payload-intensive operations."
-  },
-  {
-    id: "locus-amr",
-    name: "Locus Robotics LocusBot ecosystem",
-    company: "Locus Robotics",
-    technology: "amr",
-    typeLabel: "Collaborative AMR picking platform",
-    deployment: ["RaaS", "Scale deployment", "WMS integration"],
-    payloadKg: 36,
-    enduranceHours: 10,
-    speedMps: 1.6,
-    capabilities: { lift: 42, mobility: 90, dexterity: 18, vision: 72, endurance: 92, speed: 88, autonomy: 88, safety: 90, api: 88, scalability: 92 },
-    readiness: 92,
-    commercialMaturity: 94,
-    maintenance: 86,
-    raasMonthlyUsd: 4500,
-    leaseMonthlyUsd: 3400,
-    purchaseUsd: 70000,
-    integrationComplexity: 36,
-    bestFor: ["case-picking", "g2p-replenishment", "cross-dock-sort", "putaway"],
-    caution: "High-maturity option for movement and workflow guidance; requires humans or arms for complex manipulation."
-  },
-  {
-    id: "geekplus-amr",
-    name: "Geek+ AMR / goods-to-person",
-    company: "Geek+",
-    technology: "amr",
-    typeLabel: "Goods-to-person AMR fleet",
-    deployment: ["RaaS", "Lease", "Purchase"],
-    payloadKg: 500,
-    enduranceHours: 10,
-    speedMps: 1.8,
-    capabilities: { lift: 80, mobility: 86, dexterity: 12, vision: 72, endurance: 92, speed: 90, autonomy: 88, safety: 86, api: 84, scalability: 90 },
-    readiness: 88,
-    commercialMaturity: 88,
-    maintenance: 82,
-    raasMonthlyUsd: 6000,
-    leaseMonthlyUsd: 4500,
-    purchaseUsd: 95000,
-    integrationComplexity: 46,
-    bestFor: ["g2p-replenishment", "putaway", "pallet-movement", "case-picking"],
-    caution: "Strong when process can be designed around AMR workflows; layout and fleet traffic management are critical."
-  },
-  {
-    id: "zebra-fetch",
-    name: "Zebra Fetch / AMR portfolio",
-    company: "Zebra Technologies",
-    technology: "amr",
-    typeLabel: "AMR and workflow automation",
-    deployment: ["Lease", "Managed service", "Purchase"],
-    payloadKg: 150,
-    enduranceHours: 9,
-    speedMps: 1.7,
-    capabilities: { lift: 62, mobility: 88, dexterity: 16, vision: 76, endurance: 88, speed: 88, autonomy: 86, safety: 88, api: 86, scalability: 86 },
-    readiness: 88,
-    commercialMaturity: 90,
-    maintenance: 84,
-    raasMonthlyUsd: 5200,
-    leaseMonthlyUsd: 3900,
-    purchaseUsd: 85000,
-    integrationComplexity: 42,
-    bestFor: ["g2p-replenishment", "inbound-receiving", "cross-dock-sort", "yard-dock-inspection"],
-    caution: "Good fit for material movement and scanning workflows; not a humanoid substitute for dexterous tasks."
-  },
-  {
-    id: "mir-amr",
-    name: "Mobile Industrial Robots MiR fleet",
-    company: "MiR / Teradyne",
-    technology: "amr",
-    typeLabel: "Autonomous mobile robot",
-    deployment: ["Lease", "Purchase", "Integrator-led"],
-    payloadKg: 1350,
-    enduranceHours: 10,
-    speedMps: 1.5,
-    capabilities: { lift: 86, mobility: 84, dexterity: 12, vision: 70, endurance: 88, speed: 82, autonomy: 84, safety: 88, api: 82, scalability: 80 },
-    readiness: 86,
-    commercialMaturity: 88,
-    maintenance: 82,
-    raasMonthlyUsd: 6200,
-    leaseMonthlyUsd: 4700,
-    purchaseUsd: 110000,
-    integrationComplexity: 44,
-    bestFor: ["pallet-movement", "g2p-replenishment", "putaway"],
-    caution: "Strong payload movement platform; needs engineered load transfer points and traffic management."
-  },
-  {
-    id: "seegrid-palion",
-    name: "Seegrid Palion Lift / Tow Tractor",
-    company: "Seegrid",
-    technology: "robotic-forklift",
-    typeLabel: "Autonomous forklift and tow tractor",
-    deployment: ["RaaS", "Lease", "Managed deployment"],
-    payloadKg: 1600,
-    enduranceHours: 10,
-    speedMps: 1.8,
-    capabilities: { lift: 96, mobility: 86, dexterity: 22, vision: 78, endurance: 92, speed: 86, autonomy: 86, safety: 90, api: 80, scalability: 84 },
-    readiness: 88,
-    commercialMaturity: 88,
-    maintenance: 82,
-    raasMonthlyUsd: 12000,
-    leaseMonthlyUsd: 9200,
-    purchaseUsd: 210000,
-    integrationComplexity: 54,
-    bestFor: ["pallet-movement", "truck-loading", "putaway"],
-    caution: "Strong pallet movement answer; requires floor quality, lane discipline, safety zoning, and WMS/WES task interface."
-  },
-  {
-    id: "fox-forklift",
-    name: "Fox Robotics autonomous forklift",
-    company: "Fox Robotics",
-    technology: "robotic-forklift",
-    typeLabel: "Autonomous trailer loading/unloading forklift",
-    deployment: ["RaaS", "Managed deployment"],
-    payloadKg: 1600,
-    enduranceHours: 9,
-    speedMps: 1.7,
-    capabilities: { lift: 96, mobility: 82, dexterity: 24, vision: 84, endurance: 88, speed: 84, autonomy: 84, safety: 90, api: 78, scalability: 78 },
-    readiness: 82,
-    commercialMaturity: 80,
-    maintenance: 80,
-    raasMonthlyUsd: 13500,
-    leaseMonthlyUsd: 10200,
-    purchaseUsd: 230000,
-    integrationComplexity: 58,
-    bestFor: ["truck-loading", "pallet-movement", "putaway"],
-    caution: "Strong fit for dock and trailer workflows; validate trailer variability, pallet quality, and site safety controls."
-  },
-  {
-    id: "vecna-afl",
-    name: "Vecna Robotics autonomous forklifts",
-    company: "Vecna Robotics",
-    technology: "robotic-forklift",
-    typeLabel: "Autonomous forklift fleet",
-    deployment: ["RaaS", "Lease", "Integrator-led"],
-    payloadKg: 1800,
-    enduranceHours: 10,
-    speedMps: 1.6,
-    capabilities: { lift: 96, mobility: 84, dexterity: 22, vision: 80, endurance: 90, speed: 82, autonomy: 84, safety: 90, api: 82, scalability: 82 },
-    readiness: 84,
-    commercialMaturity: 84,
-    maintenance: 80,
-    raasMonthlyUsd: 12500,
-    leaseMonthlyUsd: 9600,
-    purchaseUsd: 220000,
-    integrationComplexity: 54,
-    bestFor: ["pallet-movement", "truck-loading", "putaway"],
-    caution: "Good fit for pallet movement; implementation quality depends on integration and process standardization."
-  },
-  {
-    id: "bd-stretch",
-    name: "Boston Dynamics Stretch",
-    company: "Boston Dynamics",
-    technology: "warehouse-specialist",
-    typeLabel: "Specialist warehouse case handling robot",
-    deployment: ["Managed deployment", "Service contract"],
-    payloadKg: 23,
-    enduranceHours: 8,
-    speedMps: 1.0,
-    capabilities: { lift: 80, mobility: 62, dexterity: 60, vision: 88, endurance: 86, speed: 86, autonomy: 84, safety: 84, api: 72, scalability: 78 },
-    readiness: 84,
-    commercialMaturity: 84,
-    maintenance: 76,
-    raasMonthlyUsd: 22000,
-    leaseMonthlyUsd: 17000,
-    purchaseUsd: 480000,
-    integrationComplexity: 66,
-    bestFor: ["container-unloading", "palletizing", "sorter-induction"],
-    caution: "Not a humanoid, but often a better ROI answer for container unload and case handling where the task is specialized."
-  },
-  {
-    id: "fanuc-pallet-cell",
-    name: "FANUC / ABB palletizing cell",
-    company: "FANUC / ABB ecosystem",
-    technology: "robotic-arm",
-    typeLabel: "Industrial palletizing robot cell",
-    deployment: ["Purchase", "Lease", "Integrator-led"],
-    payloadKg: 80,
-    enduranceHours: 20,
-    speedMps: 2.2,
-    capabilities: { lift: 96, mobility: 20, dexterity: 70, vision: 76, endurance: 98, speed: 90, autonomy: 78, safety: 78, api: 76, scalability: 78 },
-    readiness: 94,
-    commercialMaturity: 96,
-    maintenance: 86,
-    raasMonthlyUsd: 16000,
-    leaseMonthlyUsd: 11500,
-    purchaseUsd: 380000,
-    integrationComplexity: 62,
-    bestFor: ["palletizing", "sorter-induction", "packing-qc"],
-    caution: "Mature and robust for engineered cells; poor fit for highly mobile human-space work unless process is redesigned."
-  },
-  {
-    id: "mujin-cell",
-    name: "Mujin robotic case handling cell",
-    company: "Mujin",
-    technology: "robotic-arm",
-    typeLabel: "AI robotic case handling / depalletizing",
-    deployment: ["Managed deployment", "Integrator-led", "Purchase"],
-    payloadKg: 25,
-    enduranceHours: 18,
-    speedMps: 1.8,
-    capabilities: { lift: 82, mobility: 24, dexterity: 78, vision: 88, endurance: 94, speed: 86, autonomy: 84, safety: 82, api: 78, scalability: 80 },
-    readiness: 86,
-    commercialMaturity: 84,
-    maintenance: 80,
-    raasMonthlyUsd: 19000,
-    leaseMonthlyUsd: 14500,
-    purchaseUsd: 430000,
-    integrationComplexity: 68,
-    bestFor: ["container-unloading", "palletizing", "sorter-induction"],
-    caution: "Strong for engineered case handling; needs good inbound variability data and mechanical integration."
-  },
-  {
-    id: "righthand-piecepick",
-    name: "RightHand Robotics / piece-pick cell",
-    company: "RightHand Robotics ecosystem",
-    technology: "robotic-arm",
-    typeLabel: "Robotic piece-picking cell",
-    deployment: ["RaaS", "Lease", "Integrator-led"],
-    payloadKg: 5,
-    enduranceHours: 18,
-    speedMps: 1.4,
-    capabilities: { lift: 34, mobility: 18, dexterity: 92, vision: 90, endurance: 94, speed: 76, autonomy: 82, safety: 82, api: 82, scalability: 76 },
-    readiness: 80,
-    commercialMaturity: 78,
-    maintenance: 78,
-    raasMonthlyUsd: 12500,
-    leaseMonthlyUsd: 9400,
-    purchaseUsd: 260000,
-    integrationComplexity: 58,
-    bestFor: ["piece-picking", "packing-qc", "kitting-vas"],
-    caution: "Good for structured piece picking; validate SKU pickability and exception rate before committing."
-  },
-  {
-    id: "dexory-inventory",
-    name: "DexoryView autonomous inventory robot",
-    company: "Dexory",
-    technology: "vision",
-    typeLabel: "Autonomous inventory scan platform",
-    deployment: ["RaaS", "Managed service", "Lease"],
-    payloadKg: 5,
-    enduranceHours: 10,
-    speedMps: 1.4,
-    capabilities: { lift: 8, mobility: 86, dexterity: 10, vision: 96, endurance: 88, speed: 76, autonomy: 90, safety: 90, api: 86, scalability: 88 },
-    readiness: 86,
-    commercialMaturity: 84,
-    maintenance: 82,
-    raasMonthlyUsd: 8500,
-    leaseMonthlyUsd: 6500,
-    purchaseUsd: 160000,
-    integrationComplexity: 40,
-    bestFor: ["inventory-count", "yard-dock-inspection", "putaway"],
-    caution: "Excellent for inventory visibility and audit; not a material handling solution."
-  },
-  {
-    id: "gather-ai-drone",
-    name: "Gather AI inventory drones",
-    company: "Gather AI",
-    technology: "vision",
-    typeLabel: "Autonomous inventory drone system",
-    deployment: ["Subscription", "Managed service"],
-    payloadKg: 1,
-    enduranceHours: 0.5,
-    speedMps: 2.0,
-    capabilities: { lift: 4, mobility: 92, dexterity: 6, vision: 94, endurance: 54, speed: 88, autonomy: 84, safety: 82, api: 80, scalability: 86 },
-    readiness: 82,
-    commercialMaturity: 80,
-    maintenance: 78,
-    raasMonthlyUsd: 6500,
-    leaseMonthlyUsd: 5200,
-    purchaseUsd: 120000,
-    integrationComplexity: 42,
-    bestFor: ["inventory-count", "yard-dock-inspection"],
-    caution: "High-value for scan and audit; operations must validate airspace rules, battery cycles, and people interaction."
-  },
-  {
-    id: "cognex-vision",
-    name: "Cognex / Zebra fixed vision inspection",
-    company: "Cognex / Zebra / Scandit ecosystem",
-    technology: "vision",
-    typeLabel: "Fixed vision, OCR and barcode validation",
-    deployment: ["Subscription", "Purchase", "Integrator-led"],
-    payloadKg: 0,
-    enduranceHours: 24,
-    speedMps: 0,
-    capabilities: { lift: 0, mobility: 10, dexterity: 0, vision: 98, endurance: 98, speed: 92, autonomy: 80, safety: 88, api: 88, scalability: 90 },
-    readiness: 94,
-    commercialMaturity: 96,
-    maintenance: 88,
-    raasMonthlyUsd: 4000,
-    leaseMonthlyUsd: 3000,
-    purchaseUsd: 90000,
-    integrationComplexity: 38,
-    bestFor: ["packing-qc", "inbound-receiving", "sorter-induction", "cross-dock-sort", "truck-loading"],
-    caution: "Mature quality and scan automation; requires engineered camera placement and good master data."
+  for (const [path, [min, max]] of Object.entries(bounds)) {
+    const [group, key] = path.split('.'); const value = c[group]?.[key];
+    if (!finite(value) || value < min || value > max) errors.push(`${path}: use a number from ${min} to ${max}.`);
   }
-];
-
-const DEFAULT_STATE = {
-  processId: "case-picking",
-  regionId: "europe",
-  commercialModel: "raas",
-  scenarioName: "DP World Hybrid Workforce baseline",
-  params: {},
-  selectedRobotId: null,
-  customProcess: {
-    name: "Custom process flow",
-    category: "Custom",
-    summary: "Define a custom DP World 3PL process and upload engineering, process, or material-flow files.",
-    steps: ["Receive task", "Move material", "Validate quality", "Close transaction"]
-  },
-  uploadedAssets: []
-};
-
-const COMMON_PARAMETER_DEFINITIONS = [
-  { key: "volumePerShift", label: "Volume per shift", min: 500, max: 15000, step: 100, suffix: " units", group: "Demand" },
-  { key: "shiftHours", label: "Shift duration", min: 6, max: 12, step: 0.5, suffix: " hrs", group: "Labor" },
-  { key: "operatingShiftsDay", label: "Operating shifts per day", min: 1, max: 3, step: 0.5, suffix: " shifts", group: "Labor" },
-  { key: "avgPayloadKg", label: "Average payload", min: 0, max: 35, step: 1, suffix: " kg", group: "Product" },
-  { key: "travelMeters", label: "Average travel distance", min: 1, max: 140, step: 1, suffix: " m", group: "Layout" },
-  { key: "complexity", label: "Process complexity", min: 0, max: 100, step: 1, suffix: "/100", group: "Process" },
-  { key: "variability", label: "SKU / task variability", min: 0, max: 100, step: 1, suffix: "/100", group: "Process" },
-  { key: "ergonomicsRisk", label: "Ergonomics risk", min: 0, max: 100, step: 1, suffix: "/100", group: "Safety" },
-  { key: "targetServiceLevel", label: "Target service level", min: 85, max: 99, step: 1, suffix: "%", group: "SLA" },
-  { key: "humanUtilization", label: "Manual labor utilization", min: 50, max: 92, step: 1, suffix: "%", group: "Labor" },
-  { key: "robotUtilization", label: "Robot target utilization", min: 45, max: 90, step: 1, suffix: "%", group: "Automation" },
-  { key: "autonomyTarget", label: "Required autonomy", min: 40, max: 95, step: 1, suffix: "/100", group: "Automation" },
-  { key: "cloudCostMonthly", label: "Platform cloud + support", min: 2000, max: 60000, step: 500, prefix: "$", suffix: "/mo", group: "Cost" },
-  { key: "integrationCapex", label: "Startup integration budget", min: 50000, max: 2500000, step: 25000, prefix: "$", group: "Cost" },
-  { key: "processStandardization", label: "Process standardization", min: 0, max: 100, step: 1, suffix: "/100", group: "Readiness" }
-];
-
-const PROCESS_PARAMETER_DEFINITIONS = {
-  default: [
-    { key: "peakFactor", label: "Peak demand multiplier", min: 1, max: 2.2, step: 0.05, suffix: "x", group: "Demand" },
-    { key: "exceptionRate", label: "Exception rate", min: 0, max: 35, step: 1, suffix: "%", group: "Quality" },
-    { key: "layoutReadiness", label: "Layout readiness", min: 0, max: 100, step: 1, suffix: "/100", group: "Readiness" },
-    { key: "wmsIntegration", label: "WMS / WES integration readiness", min: 0, max: 100, step: 1, suffix: "/100", group: "Readiness" },
-    { key: "safetyCriticality", label: "Safety criticality", min: 0, max: 100, step: 1, suffix: "/100", group: "Safety" }
-  ],
-  "inbound-receiving": [
-    { key: "dockDoorUtilization", label: "Dock-door utilization", min: 20, max: 100, step: 1, suffix: "%", group: "Dock" },
-    { key: "productFragility", label: "Fragile / damage-sensitive items", min: 0, max: 100, step: 1, suffix: "/100", group: "Product" }
-  ],
-  putaway: [
-    { key: "palletHeightCm", label: "Average pallet / load height", min: 60, max: 220, step: 5, suffix: " cm", group: "Product" },
-    { key: "skuVelocitySkew", label: "SKU velocity skew", min: 0, max: 100, step: 1, suffix: "/100", group: "Slotting" }
-  ],
-  "case-picking": [
-    { key: "skuVelocitySkew", label: "ABC velocity concentration", min: 0, max: 100, step: 1, suffix: "/100", group: "Slotting" },
-    { key: "productFragility", label: "Product fragility", min: 0, max: 100, step: 1, suffix: "/100", group: "Product" }
-  ],
-  "piece-picking": [
-    { key: "skuVelocitySkew", label: "Long-tail SKU intensity", min: 0, max: 100, step: 1, suffix: "/100", group: "SKU" },
-    { key: "productFragility", label: "Fragility / deformability", min: 0, max: 100, step: 1, suffix: "/100", group: "Product" }
-  ],
-  "g2p-replenishment": [
-    { key: "skuVelocitySkew", label: "Replenishment volatility", min: 0, max: 100, step: 1, suffix: "/100", group: "Demand" }
-  ],
-  "cross-dock-sort": [
-    { key: "dockDoorUtilization", label: "Dock-door utilization", min: 20, max: 100, step: 1, suffix: "%", group: "Dock" },
-    { key: "peakFactor", label: "Arrival wave peak", min: 1, max: 2.5, step: 0.05, suffix: "x", group: "Demand" }
-  ],
-  "container-unloading": [
-    { key: "dockDoorUtilization", label: "Door time pressure", min: 20, max: 100, step: 1, suffix: "%", group: "Dock" },
-    { key: "productFragility", label: "Fragile / unstable cartons", min: 0, max: 100, step: 1, suffix: "/100", group: "Product" }
-  ],
-  "truck-loading": [
-    { key: "dockDoorUtilization", label: "Dock-door utilization", min: 20, max: 100, step: 1, suffix: "%", group: "Dock" },
-    { key: "palletHeightCm", label: "Average pallet height", min: 60, max: 220, step: 5, suffix: " cm", group: "Product" }
-  ],
-  palletizing: [
-    { key: "palletHeightCm", label: "Target pallet height", min: 60, max: 240, step: 5, suffix: " cm", group: "Product" },
-    { key: "productFragility", label: "Crush / damage risk", min: 0, max: 100, step: 1, suffix: "/100", group: "Product" }
-  ],
-  "pallet-movement": [
-    { key: "palletHeightCm", label: "Average pallet height", min: 60, max: 240, step: 5, suffix: " cm", group: "Product" },
-    { key: "dockDoorUtilization", label: "Traffic congestion / dock utilization", min: 20, max: 100, step: 1, suffix: "%", group: "Layout" }
-  ],
-  "returns-processing": [
-    { key: "productFragility", label: "Condition variability / fragility", min: 0, max: 100, step: 1, suffix: "/100", group: "Product" }
-  ],
-  "kitting-vas": [
-    { key: "productFragility", label: "Assembly fragility", min: 0, max: 100, step: 1, suffix: "/100", group: "Product" }
-  ],
-  "yard-dock-inspection": [
-    { key: "dockDoorUtilization", label: "Dock-door / yard intensity", min: 20, max: 100, step: 1, suffix: "%", group: "Yard" }
-  ]
-};
-
-function parameterDefinitionsForProcess(processId) {
-  const specific = PROCESS_PARAMETER_DEFINITIONS[processId] || [];
-  const seen = new Set();
-  return [...COMMON_PARAMETER_DEFINITIONS, ...PROCESS_PARAMETER_DEFINITIONS.default, ...specific]
-    .filter(def => {
-      if (seen.has(def.key)) return false;
-      seen.add(def.key);
-      return true;
-    });
+  if (c.baseline?.shifts * c.baseline?.shiftHours > 24) errors.push('Shift hours exceed 24 hours per day.');
+  if (!Number.isInteger(c.baseline?.shifts) || !Number.isInteger(c.economics?.horizonYears)) errors.push('Shifts and study years must be whole numbers.');
+  if (!['purchase', 'lease', 'raas'].includes(c.economics?.commercialModel)) errors.push('Choose purchase, lease, or RaaS.');
+  if (!Array.isArray(c.actions) || !c.actions.length) errors.push('Add at least one action.');
+  const ids = new Set((c.actions || []).map(a => a.id));
+  if (ids.size !== c.actions?.length) errors.push('Action identifiers must be unique.');
+  for (const a of c.actions || []) {
+    for (const key of ['seconds', 'frequency', 'payloadKg', 'reachM', 'aisleM']) if (!finite(a[key]) || a[key] < 0) errors.push(`${a.name || a.id}: ${key} is missing or invalid.`);
+    if (!a.skill || !a.name?.trim()) errors.push('Name each action and choose its skill.');
+    if (a.dependency && (!ids.has(a.dependency) || a.dependency === a.id)) errors.push(`${a.name}: dependency is not valid.`);
+  }
+  const visiting = new Set(), visited = new Set(), actionMap = new Map((c.actions || []).map(a => [a.id, a]));
+  function visit(id) { if (visiting.has(id)) return true; if (visited.has(id)) return false; visiting.add(id); const parent = actionMap.get(id)?.dependency; if (parent && actionMap.has(parent) && visit(parent)) return true; visiting.delete(id); visited.add(id); return false; }
+  if ([...ids].some(visit)) errors.push('The action dependencies contain a cycle.');
+  return [...new Set(errors)];
 }
 
-const SOURCE_NOTES = [
-  "Public robot specifications and commercial models are incomplete and change frequently. Values in this app are planning assumptions for strategy simulation, not procurement facts.",
-  "For procurement, replace these values with OEM responses, DP World site observations, WMS data, safety validation, and service-level proposals.",
-  "The model deliberately includes AMRs, robotic forklifts, robotic arms, vision systems, warehouse-specialist robots, and humanoids so the platform recommends the best combination instead of forcing every process to a humanoid."
-];
-
-/* ===== src-modules/engine.js ===== */
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
+function evaluateScenario(c, scenario, configs, overrides = {}) {
+  const b = { ...c.baseline, ...(overrides.baseline || {}) }, e = { ...c.economics, ...(overrides.economics || {}) };
+  const errors = validateCase({ ...c, baseline: b, economics: e });
+  const warnings = ['Planning model: no traffic, queue, charger schedule, spatial collision, or site safety validation.'];
+  const start = { id: scenario.id, name: scenario.name, modelVersion: MODEL_VERSION, revision: c.revision, errors, warnings, valid: false, status: 'needs-data', cashflows: [], fleet: [], capacity: null, annualNet: null, payback: null, quality: null };
+  if (errors.length) return start;
+  if (b.demandDaily === 0) return { ...start, status: 'no-demand', errors: ['Demand is zero. No automation benefit can be calculated.'] };
+  if (c.actions.some(a => a.parallel)) return { ...start, errors: ['Parallel work is recorded. A shared-resource or event model is required before this local calculation can run.'] };
+  const isManual = scenario.kind === 'manual';
+  const factor = scenario.manualFactor ?? 1;
+  if (!finite(factor) || factor <= 0 || factor > 2) return { ...start, errors: ['The manual method factor is invalid.'] };
+  const configMap = new Map(configs.map(v => [v.id, v]));
+  const assignments = scenario.assignments || {};
+  if (Object.keys(assignments).some(id => !c.actions.some(a => a.id === id))) errors.push('An assignment links to a missing action.');
+  const robotSeconds = {}, assignedActions = {}, actionRows = [];
+  let humanSeconds = 0, removedSeconds = 0, handoffs = 0, lastActor = 'human';
+  const baselineSeconds = total(c.actions.map(a => a.seconds * a.frequency));
+  if (baselineSeconds <= 0) errors.push('The human work time must be greater than zero.');
+  for (const a of c.actions) {
+    const actor = isManual ? 'human' : assignments[a.id] || 'human';
+    const humanTime = a.seconds * a.frequency * factor;
+    let seconds = humanTime, fit = null;
+    if (actor !== 'human') {
+      const config = configMap.get(actor); fit = fitAction(a, config);
+      if (fit.status !== 'fit') errors.push(`${a.name}: ${fit.status === 'blocked' ? 'a hard requirement fails' : 'performance or capability data is missing'} for ${config?.name || actor}.`);
+      seconds = config?.times?.[a.skill] * a.frequency;
+      if (!finite(seconds) || seconds <= 0) seconds = 0;
+      robotSeconds[actor] = (robotSeconds[actor] || 0) + seconds;
+      (assignedActions[actor] ||= []).push(a);
+      if (config?.requiresOperator) humanSeconds += seconds;
+      removedSeconds += humanTime;
+    } else humanSeconds += humanTime;
+    if (actor !== lastActor) handoffs++;
+    lastActor = actor;
+    actionRows.push({ id: a.id, name: a.name, actor, humanBaselineSeconds: a.seconds * a.frequency, seconds, fit: fit?.status || 'human' });
+  }
+  if (lastActor !== 'human') handoffs++;
+  // The local model needs an explicit carrier transfer between different machine types.
+  for (let i = 1; i < actionRows.length; i++) if (actionRows[i].actor !== 'human' && actionRows[i - 1].actor !== 'human' && actionRows[i].actor !== actionRows[i - 1].actor) warnings.push('Mixed equipment needs a tested carrier transfer. The handoff time is an assumption.');
+  const operatingHours = b.shifts * b.shiftHours;
+  const avgHour = b.demandDaily / operatingHours, peakHour = avgHour * b.peakFactor;
+  const annualVolume = b.demandDaily * b.daysYear;
+  let recoverySeconds = 0, quality = 1, annualMachine = 0, hardwareUpfront = 0;
+  for (const [id, rawSeconds] of Object.entries(robotSeconds)) {
+    const v = configMap.get(id); if (!v) continue;
+    const count = scenario.counts?.[id];
+    if (!Number.isInteger(count) || count < 1 || count > 100) errors.push(`${v.name}: use a whole fleet count from 1 to 100.`);
+    for (const key of ['successPct', 'interventionPct', 'recoverySec', 'chargePct', 'downtimePct', 'supportAnnual', 'energyAnnual']) if (!finite(v[key]) || v[key] < 0) errors.push(`${v.name}: ${key} is missing or invalid.`);
+    if (!(v.successPct > 0 && v.successPct <= 100) || v.interventionPct > 100 || v.chargePct + v.downtimePct >= 100) errors.push(`${v.name}: check success, charge, and downtime percentages.`);
+    const usable = 1 - (v.chargePct + v.downtimePct) / 100;
+    const success = v.successPct / 100;
+    // One retry at most, with the same assumed success rate. Human recovery handles remaining failures and recorded interventions.
+    const retrySeconds = rawSeconds * (2 - success);
+    const firstPass = success;
+    const finalSuccess = 1 - (1 - success) ** 2;
+    const interventions = Math.min(1, v.interventionPct / 100 + (1 - finalSuccess));
+    recoverySeconds += interventions * v.recoverySec;
+    quality *= firstPass;
+    const singleRate = retrySeconds > 0 ? 3600 / retrySeconds * usable : 0;
+    const required = singleRate > 0 ? Math.ceil(peakHour / singleRate) : null;
+    start.fleet.push({ id, name: v.name, count: count || 0, required, busySeconds: rawSeconds, retrySeconds, usablePct: usable * 100, rate: singleRate * (count || 0), source: v.source, interventionPct: interventions * 100 });
+    const price = e.commercialModel === 'purchase' ? v.price : v.leaseMonthly;
+    if (!finite(price) || price < 0) errors.push(`${v.name}: commercial price is missing or invalid.`);
+    if (e.commercialModel === 'purchase') { hardwareUpfront += (count || 0) * (v.price || 0); annualMachine += (count || 0) * (v.supportAnnual + v.energyAnnual); }
+    else annualMachine += (count || 0) * ((v.leaseMonthly || 0) * 12 + v.energyAnnual + (v.serviceIncluded ? 0 : v.supportAnnual));
+  }
+  if (Object.keys(scenario.counts || {}).some(id => !robotSeconds[id] && scenario.counts[id] > 0)) errors.push('The fleet contains an unused configuration. Remove it or assign work to it.');
+  if (errors.length) return { ...start, errors: [...new Set(errors)], actionRows };
+  humanSeconds += handoffs * e.handoffSec + recoverySeconds;
+  const neededPeople = humanSeconds > 0 ? Math.max(b.minPeoplePerShift, Math.ceil(peakHour * humanSeconds / 3600 / (b.humanUtilPct / 100) - 1e-10)) : b.minPeoplePerShift;
+  const peoplePerShift = isManual ? b.peoplePerShift : neededPeople;
+  const humanRate = humanSeconds > 0 ? peoplePerShift * 3600 * (b.humanUtilPct / 100) / humanSeconds : peakHour;
+  const rates = [humanRate, ...start.fleet.map(f => f.rate)];
+  const capacity = Math.min(...rates), meetsDemand = capacity + 1e-8 >= peakHour;
+  const baselineFte = b.peoplePerShift * b.shifts * b.staffingCover;
+  const scenarioFte = peoplePerShift * b.shifts * b.staffingCover;
+  const additionalFte = Math.max(0, scenarioFte - baselineFte);
+  const extraLaborAnnual = additionalFte * b.salaryAnnual;
+  const potentialFte = Math.max(0, baselineFte - scenarioFte);
+  const cashFte = e.benefitMode === 'Redeployed capacity' ? 0 : Math.min(potentialFte, e.cashableFte);
+  if (potentialFte < e.cashableFte && !isManual) warnings.push('The staffing plan limits the entered cash-benefit positions. Only the achievable reduction is costed.');
+  const grossLaborBenefit = cashFte * b.salaryAnnual;
+  const capturedLaborBenefit = grossLaborBenefit * e.retainedPct / 100;
+  const upfront = isManual ? 0 : (start.fleet.length ? hardwareUpfront + e.integration + e.siteChanges : 0) + (scenario.extraUpfront || 0);
+  const annualAddedCost = isManual ? 0 : annualMachine + (start.fleet.length ? e.softwareAnnual + e.supportAnnual : 0) + (scenario.extraAnnual || 0) + extraLaborAnnual;
+  if (additionalFte > 0) warnings.push(`The option needs ${additionalFte} additional annual staffing positions. Their full cost is included.`);
+  const annualBenefit = isManual ? 0 : capturedLaborBenefit + e.otherBenefitAnnual;
+  const annualNet = annualBenefit - annualAddedCost;
+  let cumulative = -upfront, npv = -upfront, payback = upfront === 0 && annualNet > 0 ? 0 : null;
+  for (let year = 1; year <= e.horizonYears; year++) {
+    const benefit = annualBenefit * (year === 1 ? 1 - e.rampMonths / 12 : 1);
+    const cash = benefit - annualAddedCost + (year === e.horizonYears && !isManual ? e.residualValue : 0);
+    const before = cumulative; cumulative += cash;
+    if (payback === null && cumulative >= 0 && cash > 0) payback = (year - 1) + Math.max(0, -before) / cash;
+    npv += cash / ((1 + e.discountPct / 100) ** year);
+    start.cashflows.push({ year, benefit, cost: annualAddedCost, net: cash, cumulative });
+  }
+  // Payback follows the actual ramp months. Annual interpolation can claim payback before benefit starts.
+  let monthlyBalance = -upfront;
+  let hadInvestment = upfront > 0;
+  payback = null;
+  for (let month = 1; month <= e.horizonYears * 12; month++) {
+    const benefitShare = Math.max(0, Math.min(1, month - e.rampMonths));
+    const monthlyCash = annualBenefit / 12 * benefitShare - annualAddedCost / 12;
+    const before = monthlyBalance;
+    monthlyBalance += monthlyCash;
+    if (monthlyBalance < 0) hadInvestment = true;
+    if (payback === null && monthlyBalance >= 0 && monthlyCash > 0) payback = hadInvestment ? (month - 1 + Math.max(0,-before) / monthlyCash) / 12 : annualNet > 0 ? 0 : null;
+    if (month === e.horizonYears * 12 && !isManual) {
+      const beforeResidual = monthlyBalance;
+      monthlyBalance += e.residualValue;
+      if (payback === null && beforeResidual < 0 && monthlyBalance >= 0) payback = e.horizonYears;
+    }
+  }
+  if (e.retainedPct === 0 && cashFte > 0) warnings.push('No labour benefit is retained in this financial viewpoint. Recovery work remains in the staffing requirement.');
+  const meetsQuality = quality * 100 >= b.qualityTargetPct;
+  if (!meetsDemand) warnings.push('The option does not meet peak demand in the planning model.');
+  if (!meetsQuality) warnings.push('The assumed first-pass quality is below the target. Retry success is not used to conceal first-pass failures.');
+  const unknownSources = [...new Set(Object.keys(robotSeconds).map(id => configMap.get(id)?.source))];
+  const evidence = isManual ? 'Human baseline' : unknownSources.some(s => ['Sample', 'Assumed', 'Unknown', 'Supplier claim', 'Out of date'].includes(s)) ? 'Evidence needed' : 'Evidence supplied · check conditions';
+  const financial = meetsDemand && meetsQuality;
+  return { ...start, valid: errors.length === 0, financial, cashflows: financial ? start.cashflows : [], status: errors.length ? 'needs-data' : !financial ? 'not-feasible' : isManual ? 'baseline' : annualNet <= 0 || payback === null || npv <= 0 ? 'no-business-case' : 'candidate', errors: [...new Set(errors)], warnings: [...new Set(warnings)], capacity, avgHour, peakHour, meetsDemand, meetsQuality, quality: quality * 100, annualVolume, baselineSeconds, humanSeconds, removedSeconds, handoffs, recoverySeconds, coveragePct: baselineSeconds ? removedSeconds / baselineSeconds * 100 : 0, automatedActions: actionRows.filter(a => a.actor !== 'human').length, actionRows, peoplePerShift, neededPeople, baselineFte, scenarioFte, additionalFte, extraLaborAnnual, potentialFte, cashFte: financial ? cashFte : null, grossLaborBenefit: financial ? grossLaborBenefit : null, capturedLaborBenefit: financial ? capturedLaborBenefit : null, annualBenefit: financial ? annualBenefit : null, upfront, annualAddedCost, annualNet: financial ? annualNet : null, firstYear: financial ? start.cashflows[0]?.net ?? 0 : null, lifetimeNet: financial ? cumulative : null, npv: financial ? npv : null, payback: financial ? payback : null, costPerUnit: financial && annualVolume ? (scenarioFte * b.salaryAnnual + annualAddedCost - extraLaborAnnual + upfront / e.horizonYears) / annualVolume : null, evidence, breakEvenCapturePct: financial && grossLaborBenefit > 0 ? Math.max(0, (annualAddedCost - e.otherBenefitAnnual) / grossLaborBenefit * 100) : null, bottleneck: start.fleet.length && capacity < humanRate ? start.fleet.reduce((a, f) => f.rate < a.rate ? f : a).name : 'Human work / coverage' };
 }
 
-function formatNumber(value, decimals = 0) {
-  if (!Number.isFinite(value)) return "-";
-  return new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: decimals,
-    minimumFractionDigits: decimals
-  }).format(value);
+function evaluateCase(c, configs) { return c.scenarios.map(s => evaluateScenario(c, s, configs)); }
+function recommendCase(c, configs) {
+  const results = evaluateCase(c, configs);
+  const candidates = results.filter(r => r.status === 'candidate').sort((a, b) => b.npv - a.npv);
+  return { results, best: candidates[0] || null, text: candidates.length ? 'Advance this option to an evidence study. Confirm site performance and cash benefit before a pilot.' : results.some(r => r.status === 'needs-data') ? 'Complete the missing inputs or collect task evidence. No supported recommendation is available.' : 'Keep the current method or revise the process. No tested option meets both service and cash-benefit needs.' };
 }
 
-function formatCurrency(value, compact = true) {
-  if (!Number.isFinite(value)) return "-";
-  if (compact && Math.abs(value) >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-  if (compact && Math.abs(value) >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
+function stressScenario(c, scenario, configs) {
+  const ordinary = [
+    { name: 'Base assumptions', baseline: {}, economics: {} },
+    { name: 'Demand +20%', baseline: { demandDaily: c.baseline.demandDaily * 1.2 }, economics: {} },
+    { name: 'Benefit capture −25%', baseline: {}, economics: { retainedPct: c.economics.retainedPct * 0.75 } },
+    { name: 'Support cost +25%', baseline: {}, economics: { supportAnnual: c.economics.supportAnnual * 1.25 } }
+  ].map(s => ({ ...evaluateScenario(c, scenario, configs, s), stressName: s.name }));
+  const slower = configs.map(v => ({ ...v, times: Object.fromEntries(Object.entries(v.times || {}).map(([k,t])=>[k,t*1.2])) }));
+  const downtime = configs.map(v => ({ ...v, downtimePct: v.downtimePct == null ? null : v.downtimePct + 10 }));
+  const intervention = configs.map(v => ({ ...v, interventionPct: v.interventionPct == null ? null : Math.min(100,v.interventionPct * 2) }));
+  return [...ordinary, { ...evaluateScenario(c,scenario,slower), stressName:'Robot task time +20%' }, { ...evaluateScenario(c,scenario,downtime), stressName:'Other downtime +10 points' }, { ...evaluateScenario(c,scenario,intervention), stressName:'Human intervention rate ×2' }];
 }
 
-function percent(value, decimals = 0) {
-  if (!Number.isFinite(value)) return "-";
-  return `${value.toFixed(decimals)}%`;
-}
-
-function getProcess(state) {
-  if (state.processId === "custom-process") return buildCustomProcess(state.customProcess || {});
-  return PROCESSES.find(item => item.id === state.processId) || PROCESSES[0];
-}
-
-function getRegion(state) {
-  return REGIONS.find(item => item.id === state.regionId) || REGIONS[0];
-}
-
-function getParams(state) {
-  const process = getProcess(state);
-  return { ...process.defaultParams, ...(state.params || {}) };
-}
-
-function fullyLoadedLaborCostPerHour(region) {
-  return region.wageUsdHour * region.burden;
-}
-
-function annualFteCost(region, shiftHours) {
-  const annualHours = shiftHours * 250;
-  return fullyLoadedLaborCostPerHour(region) * annualHours;
-}
-
-function processAdjustedRequirements(process, params) {
-  const base = { ...process.requirements };
-  const payloadBoost = clamp((params.avgPayloadKg - 8) * 2.7, -18, 35);
-  const travelBoost = clamp((params.travelMeters - 40) * 0.18, -9, 20);
-  const complexityBoost = (params.complexity - 50) * 0.18;
-  const variabilityBoost = (params.variability - 50) * 0.22;
-  const ergoBoost = (params.ergonomicsRisk - 50) * 0.14;
-  const exceptionBoost = ((params.exceptionRate || 0) - 6) * 0.34;
-  const peakBoost = ((params.peakFactor || 1.2) - 1.2) * 11;
-  const layoutPenalty = (65 - (params.layoutReadiness || 65)) * 0.15;
-  const wmsBoost = (params.targetServiceLevel - 95) * 1.1 + (75 - (params.wmsIntegration || 75)) * 0.1;
-  const safetyBoost = ((params.safetyCriticality || 70) - 70) * 0.18;
-  const standardizationPenalty = (65 - (params.processStandardization || 65)) * 0.12;
-  const fragilityBoost = ((params.productFragility || 40) - 40) * 0.12;
-
-  return {
-    lift: clamp(base.lift + payloadBoost + ergoBoost, 0, 100),
-    mobility: clamp(base.mobility + travelBoost + layoutPenalty, 0, 100),
-    dexterity: clamp(base.dexterity + complexityBoost + variabilityBoost * 0.45 + fragilityBoost, 0, 100),
-    vision: clamp(base.vision + variabilityBoost * 0.45 + wmsBoost + exceptionBoost, 0, 100),
-    endurance: clamp(base.endurance + params.shiftHours * 1.2 - 10 + (params.robotUtilization - 70) * 0.2 + peakBoost, 0, 100),
-    speed: clamp(base.speed + (params.volumePerShift - process.defaultParams.volumePerShift) / 520 + peakBoost * 0.5, 0, 100),
-    autonomy: clamp(base.autonomy + (params.autonomyTarget - 70) * 0.7 + variabilityBoost * 0.32 + exceptionBoost + standardizationPenalty, 0, 100),
-    safety: clamp(base.safety + (params.ergonomicsRisk - 50) * 0.12 + safetyBoost, 0, 100),
-    api: clamp(base.api + (params.targetServiceLevel - 95) * 0.8 + ((params.wmsIntegration || 70) - 70) * 0.16, 0, 100),
-    scalability: clamp(base.scalability + (params.volumePerShift - process.defaultParams.volumePerShift) / 900 + ((params.processStandardization || 65) - 65) * 0.13, 0, 100)
+function generateOptions(c, configs, maxCount = 6) {
+  const candidates = [];
+  const assemble = (name, assignments) => {
+    const ids=[...new Set(Object.values(assignments))];
+    if (!ids.length || ids.length>3) return;
+    const scenario={id:`generated-${candidates.length+1}`,name,kind:'hybrid',assignments,counts:Object.fromEntries(ids.map(id=>[id,1])),manualFactor:1,generated:true};
+    const initial=evaluateScenario(c,scenario,configs);
+    for(const f of initial.fleet) scenario.counts[f.id]=Math.min(maxCount,Math.max(1,f.required||1));
+    candidates.push(scenario);
   };
+  for(const v of configs){
+    const assignments=Object.fromEntries(c.actions.filter(a=>fitAction(a,v).status==='fit').map(a=>[a.id,v.id]));
+    assemble(`${v.name} + people · draft`,assignments);
+  }
+  const mixed={};
+  for(const a of c.actions){
+    const eligible=configs.filter(v=>!v.requiresOperator&&fitAction(a,v).status==='fit').sort((aConfig,bConfig)=>aConfig.times[a.skill]-bConfig.times[a.skill]);
+    if(eligible[0])mixed[a.id]=eligible[0].id;
+  }
+  assemble('Mixed technology + people · fastest eligible action times',mixed);
+  return candidates;
 }
 
-const CAPABILITY_WEIGHTS = {
-  lift: 0.13,
-  mobility: 0.11,
-  dexterity: 0.14,
-  vision: 0.12,
-  endurance: 0.1,
-  speed: 0.09,
-  autonomy: 0.13,
-  safety: 0.09,
-  api: 0.05,
-  scalability: 0.04
-};
-
-function scoreRobot(robot, process, params) {
-  const req = processAdjustedRequirements(process, params);
-  let fit = 0;
-  let underfitPenalty = 0;
-  let overfitBonus = 0;
-
-  Object.entries(CAPABILITY_WEIGHTS).forEach(([key, weight]) => {
-    const capability = robot.capabilities[key] || 0;
-    const required = req[key] || 0;
-    const ratio = required <= 0 ? 1 : capability / required;
-    const normalized = clamp(ratio, 0, 1.18);
-    fit += normalized * weight * 100;
-    if (capability + 5 < required) underfitPenalty += (required - capability) * weight * 0.46;
-    if (capability > required + 12) overfitBonus += Math.min(capability - required, 18) * weight * 0.06;
-  });
-
-  const payloadPenalty = robot.payloadKg < params.avgPayloadKg ? (params.avgPayloadKg - robot.payloadKg) * 2.7 : 0;
-  const endurancePenalty = robot.enduranceHours < Math.min(4, params.shiftHours * 0.35) ? 5 : 0;
-  const processBonus = robot.bestFor.includes(process.id) ? 7 : 0;
-  const techBonus = process.recommendedTech?.includes(robot.technology) ? 6 : -2;
-  const maturityFactor = (robot.readiness * 0.16) + (robot.commercialMaturity * 0.14) + (robot.maintenance * 0.06);
-  const commercialFlex = robot.deployment.some(item => item.toLowerCase().includes("raas") || item.toLowerCase().includes("subscription")) ? 3 : 0;
-  const specialistGuardrail = process.pilotFit.includes("Specialist") && robot.technology !== "humanoid" ? 7 : 0;
-  const humanoidGuardrail = process.pilotFit.includes("Specialist") && robot.technology === "humanoid" ? -10 : 0;
-  const layoutRisk = (params.layoutReadiness || 70) < 45 && ["amr", "robotic-forklift"].includes(robot.technology) ? -5 : 0;
-  const wmsRisk = (params.wmsIntegration || 70) < 45 && robot.capabilities.api < 80 ? -4 : 0;
-
-  const score = clamp(fit - underfitPenalty + overfitBonus - payloadPenalty - endurancePenalty + processBonus + techBonus + maturityFactor + commercialFlex + specialistGuardrail + humanoidGuardrail + layoutRisk + wmsRisk, 0, 100);
-  return {
-    robot,
-    score,
-    req,
-    payloadPenalty,
-    underfitPenalty,
-    reason: buildRobotReason(robot, process, params, score)
-  };
+function searchFleet(c, scenario, configs, maxCount = 6) {
+  const ids = [...new Set(Object.values(scenario.assignments || {}).filter(id => id !== 'human'))];
+  if (!ids.length) return [];
+  if (ids.length > 3 || maxCount > 8 || maxCount < 1) throw new Error('Use up to three configurations and a fleet bound from one to eight.');
+  let combinations = [{}];
+  for (const id of ids) combinations = combinations.flatMap(base => Array.from({ length: maxCount }, (_, index) => ({ ...base, [id]: index + 1 })));
+  return combinations.map((counts, index) => ({ scenario: { ...scenario, id: `search-${index + 1}`, name: ids.map(id => `${counts[id]} × ${configs.find(v => v.id === id)?.name || id}`).join(' + '), counts }, result: evaluateScenario(c, { ...scenario, counts }, configs) })).sort((a, b) => (a.result.status === 'candidate' ? 0 : 1) - (b.result.status === 'candidate' ? 0 : 1) || (b.result.npv ?? -Infinity) - (a.result.npv ?? -Infinity));
 }
 
-function buildRobotReason(robot, process, params, score) {
-  const payloadFit = robot.payloadKg >= params.avgPayloadKg ? "payload fit" : "payload risk";
-  const processFit = robot.bestFor.includes(process.id) ? "known process fit" : process.recommendedTech?.includes(robot.technology) ? "recommended technology class" : "adjacent fit";
-  const maturity = robot.commercialMaturity >= 85 ? "high commercial maturity" : robot.commercialMaturity >= 70 ? "pilot-to-scale maturity" : "early maturity";
-  return `${payloadFit}, ${processFit}, ${maturity}, score ${score.toFixed(0)}/100`;
+function readiness(c, configs) {
+  const gaps = [];
+  const scenario = c.scenarios.find(s => s.id === c.selectedScenarioId);
+  const result = scenario ? evaluateScenario(c, scenario, configs) : null;
+  if (!result?.valid || !result.meetsDemand || !result.meetsQuality) gaps.push('Resolve process, capacity, and quality gaps.');
+  if (!c.decision || c.decision.revision !== c.revision || c.decision.outcome !== 'Proceed to evidence study' || c.decision.result?.modelVersion !== MODEL_VERSION) gaps.push('Record a current process and business-case decision.');
+  for (const key of ['scope','site','interfaces','performance','release','operators','safety','pilot']) if (!c.deployment.checklist[key]) gaps.push(`Complete the ${key} review item.`);
+  for (const key of ['siteNotes','interfaceNotes','pilotNotes','rollback','supportOwner']) if (!c.deployment[key]?.trim()) gaps.push(`Add ${key.replace(/([A-Z])/g, ' $1').toLowerCase()}.`);
+  if (!c.deployment.testResults.length || c.deployment.testResults.some(t => t.status !== 'Pass' || t.revision !== c.revision)) gaps.push('Record passing tests for the current case version.');
+  if (result?.evidence === 'Evidence needed') gaps.push('Replace sample or assumed robot performance with applicable test evidence.');
+  if (c.sample || c.actions.some(a=>['Sample','Assumed','Unknown','Out of date'].includes(a.source))) gaps.push('Confirm the human baseline, action requirements, and timing with applicable evidence.');
+  return { gaps, readyForReview: gaps.length === 0, productionAuthorized: false };
 }
 
-function rankedRobots(state) {
-  const process = getProcess(state);
-  const params = getParams(state);
-  return ROBOTS
-    .map(robot => scoreRobot(robot, process, params))
-    .sort((a, b) => b.score - a.score);
+function validateObservation(o) {
+  const errors = [];
+  for (const key of ['units','rejects','interventions']) if (!Number.isInteger(o[key]) || o[key] < 0) errors.push(`${key}: use a non-negative whole number.`);
+  for (const key of ['hours','humanHours','downtimeHours','chargeHours','cost']) if (!finite(o[key]) || o[key] < 0) errors.push(`${key}: use a non-negative number.`);
+  if (!(o.hours > 0)) errors.push('Observation hours must be greater than zero.');
+  if (o.rejects > o.units) errors.push('Rejected units cannot exceed completed units.');
+  if (o.downtimeHours + o.chargeHours > o.hours) errors.push('Charge and downtime hours exceed the observation window.');
+  if (!o.date || !o.source?.trim()) errors.push('Add a date and source.');
+  if (o.baselineCost != null && (!finite(o.baselineCost) || o.baselineCost < 0)) errors.push('Comparable baseline cost must be non-negative or unknown.');
+  return errors;
 }
 
-function selectedRobotResult(state) {
-  const ranked = rankedRobots(state);
-  if (state.selectedRobotId) {
-    const selected = ranked.find(item => item.robot.id === state.selectedRobotId);
-    if (selected) return selected;
-  }
-  return ranked[0];
+function observationMetrics(o) {
+  const errors = validateObservation(o); if (errors.length) return { errors };
+  return { errors, goodUnits: o.units - o.rejects, goodUph: (o.units - o.rejects) / o.hours, qualityPct: o.units > 0 ? (o.units - o.rejects) / o.units * 100 : null, interventionsPer1000: o.units > 0 ? o.interventions / o.units * 1000 : null, costPerUnit: o.units > o.rejects ? o.cost / (o.units - o.rejects) : null, costDelta: finite(o.baselineCost) ? o.baselineCost - o.cost : null, humanHoursPer1000: o.units > o.rejects ? o.humanHours / (o.units - o.rejects) * 1000 : null };
 }
 
-function robotMonthlyCost(robot, commercialModel) {
-  if (commercialModel === "lease") return robot.leaseMonthlyUsd;
-  if (commercialModel === "purchase") return (robot.purchaseUsd / 60) + (robot.purchaseUsd * 0.14 / 12);
-  return robot.raasMonthlyUsd;
-}
 
-function buildAutomationMix(ranked, process, robotsRequired) {
-  const mix = process.recommendedMix || { [ranked[0]?.robot.technology || "humanoid"]: 100 };
-  const entries = Object.entries(mix)
-    .map(([technology, share]) => {
-      const candidate = ranked.find(item => item.robot.technology === technology) || ranked[0];
-      const shareValue = Number(share) || 0;
-      return {
-        technology,
-        label: TECHNOLOGY_LABELS[technology] || technology,
-        share: shareValue,
-        robot: candidate.robot,
-        score: candidate.score,
-        indicativeUnits: Math.max(1, Math.ceil((robotsRequired * shareValue) / 100))
-      };
-    })
-    .sort((a, b) => b.share - a.share);
-  return entries;
-}
+/* store.js */
 
-function modelScenario(state) {
-  const process = getProcess(state);
-  const params = getParams(state);
-  const region = getRegion(state);
-  const ranked = rankedRobots(state);
-  const selected = selectedRobotResult(state);
-  const robot = selected.robot;
 
-  const annualVolume = params.volumePerShift * 250 * (params.operatingShiftsDay || 1) * (params.peakFactor || 1);
-  const laborCostHour = fullyLoadedLaborCostPerHour(region);
-  const annualCostPerFte = annualFteCost(region, params.shiftHours);
-  const manualCycleSec = calculateManualCycle(process, params);
-  const robotCycleSec = calculateRobotCycle(process, params, selected);
-  const manualJobsPerHour = 3600 / manualCycleSec;
-  const robotJobsPerHour = 3600 / robotCycleSec;
-  const manualHoursPerShift = (params.volumePerShift * manualCycleSec) / 3600;
-  const manualFte = manualHoursPerShift / (params.shiftHours * (params.humanUtilization / 100));
-  const robotJobsPerShift = robotJobsPerHour * params.shiftHours * (params.robotUtilization / 100);
-  const robotsRequiredRaw = params.volumePerShift / Math.max(1, robotJobsPerShift);
-  const robotsRequired = Math.max(1, Math.ceil(robotsRequiredRaw));
-  const robotCoveredVolume = Math.min(params.volumePerShift, robotsRequired * robotJobsPerShift);
-  const exceptionResidual = clamp((params.exceptionRate || 7) / 100, 0.03, 0.35);
-  const robotAssistHumanFte = manualFte * process.robot.assistLaborRatio;
-  const residualExceptionFte = manualFte * clamp((params.variability - 40) / 235 + exceptionResidual * 0.38, 0.06, 0.32);
-  const assistedFte = Math.max(robotAssistHumanFte + residualExceptionFte, manualFte * 0.08);
-  const fteOffset = Math.max(0, manualFte - assistedFte);
-  const annualLaborAvoided = fteOffset * annualCostPerFte * (params.operatingShiftsDay || 1);
-  const monthlyRobotCost = robotMonthlyCost(robot, state.commercialModel);
-  const annualRobotCost = robotsRequired * monthlyRobotCost * 12;
-  const annualCloudCost = params.cloudCostMonthly * 12;
-  const annualMaintenanceReserve = state.commercialModel === "purchase" ? robotsRequired * robot.purchaseUsd * 0.08 : robotsRequired * monthlyRobotCost * 12 * 0.06;
-  const annualProgramCost = annualRobotCost + annualCloudCost + annualMaintenanceReserve;
-  const netAnnualSavings = annualLaborAvoided - annualProgramCost;
-  const startupCapex = state.commercialModel === "purchase"
-    ? params.integrationCapex + (robotsRequired * robot.purchaseUsd)
-    : params.integrationCapex;
-  const paybackYears = netAnnualSavings > 0 ? startupCapex / netAnnualSavings : Infinity;
-  const roi = annualProgramCost > 0 ? (netAnnualSavings / annualProgramCost) * 100 : 0;
-  const serviceLevelDelta = calculateServiceLevelDelta(process, params, selected);
-  const projectedServiceLevel = clamp(params.targetServiceLevel + serviceLevelDelta, 82, 99.8);
-  const errorReduction = clamp(((process.manual.errorRate - process.robot.errorRate) / Math.max(0.1, process.manual.errorRate)) * 100, 0, 90);
-  const throughputGain = clamp(((manualCycleSec - robotCycleSec) / manualCycleSec) * 100, -40, 65);
-  const safetyImprovement = clamp(params.ergonomicsRisk * 0.42 + selected.robot.capabilities.safety * 0.12, 0, 70);
-  const confidence = calculateConfidence(selected, process, params, roi, paybackYears);
-  const decision = decisionSignal(confidence, netAnnualSavings, paybackYears, process, selected);
-  const annualNpv3Year = simpleNpv(netAnnualSavings, startupCapex, 0.1, 3);
-  const automationMix = buildAutomationMix(ranked, process, robotsRequired);
-
-  return {
-    state,
-    process,
-    params,
-    region,
-    ranked,
-    selected,
-    robot,
-    annualVolume,
-    laborCostHour,
-    annualCostPerFte,
-    manualCycleSec,
-    robotCycleSec,
-    manualJobsPerHour,
-    robotJobsPerHour,
-    manualFte,
-    assistedFte,
-    fteOffset,
-    robotsRequiredRaw,
-    robotsRequired,
-    robotCoveredVolume,
-    annualLaborAvoided,
-    monthlyRobotCost,
-    annualRobotCost,
-    annualCloudCost,
-    annualMaintenanceReserve,
-    annualProgramCost,
-    netAnnualSavings,
-    startupCapex,
-    paybackYears,
-    roi,
-    projectedServiceLevel,
-    errorReduction,
-    throughputGain,
-    safetyImprovement,
-    confidence,
-    decision,
-    annualNpv3Year,
-    automationMix
-  };
-}
-
-function calculateManualCycle(process, params) {
-  const travel = params.travelMeters * 0.38;
-  const complexity = (params.complexity - 50) * 0.24;
-  const variability = (params.variability - 50) * 0.18;
-  const payload = Math.max(0, params.avgPayloadKg - 8) * 0.85;
-  const peak = ((params.peakFactor || 1.2) - 1.2) * 6;
-  const exception = ((params.exceptionRate || 7) - 7) * 0.35;
-  const standardization = (60 - (params.processStandardization || 60)) * 0.08;
-  return Math.max(4, process.manual.baseCycleSec + travel * 0.18 + complexity + variability + payload + peak + exception + standardization);
-}
-
-function calculateRobotCycle(process, params, selected) {
-  const robot = selected.robot;
-  const base = process.robot.baseCycleSec;
-  const maturity = (selected.score - 60) * 0.3;
-  const speedAdj = (robot.capabilities.speed - 65) * 0.17;
-  const autonomyAdj = (robot.capabilities.autonomy - params.autonomyTarget) * 0.11;
-  const variabilityPenalty = Math.max(0, params.variability - robot.capabilities.vision) * 0.34;
-  const payloadPenalty = robot.payloadKg < params.avgPayloadKg ? (params.avgPayloadKg - robot.payloadKg) * 2.1 : 0;
-  const travelPenalty = robot.speedMps > 0 ? params.travelMeters / Math.max(0.3, robot.speedMps) * 0.08 : params.travelMeters * 0.03;
-  const exceptionPenalty = (params.exceptionRate || 7) * 0.18;
-  const integrationPenalty = Math.max(0, 65 - (params.wmsIntegration || 65)) * 0.12;
-  const layoutPenalty = Math.max(0, 60 - (params.layoutReadiness || 60)) * 0.14;
-  const cycle = base + travelPenalty + variabilityPenalty + payloadPenalty + exceptionPenalty + integrationPenalty + layoutPenalty - maturity - speedAdj - autonomyAdj;
-  return Math.max(3, cycle);
-}
-
-function calculateServiceLevelDelta(process, params, selected) {
-  const robot = selected.robot;
-  const vision = (robot.capabilities.vision - process.requirements.vision) * 0.025;
-  const api = (robot.capabilities.api - 70) * 0.018;
-  const error = (process.manual.errorRate - process.robot.errorRate) * 0.4;
-  const variabilityRisk = Math.max(0, params.variability - robot.capabilities.autonomy) * -0.025;
-  const integration = ((params.wmsIntegration || 70) - 70) * 0.012;
-  const exception = (params.exceptionRate || 7) > 15 ? -0.4 : 0;
-  return vision + api + error + variabilityRisk + integration + exception;
-}
-
-function calculateConfidence(selected, process, params, roi, paybackYears) {
-  const technical = selected.score;
-  const economic = clamp(50 + roi * 0.24 - (Number.isFinite(paybackYears) ? paybackYears * 3.8 : 28), 0, 100);
-  const processFit = process.pilotFit.includes("High") ? 85 : process.pilotFit.includes("Medium") ? 70 : process.pilotFit.includes("Specialist") ? 64 : 58;
-  const capexLight = params.integrationCapex < 700000 ? 82 : 65;
-  const readiness = ((params.layoutReadiness || 65) + (params.wmsIntegration || 65) + (params.processStandardization || 60)) / 3;
-  return clamp(technical * 0.34 + economic * 0.28 + processFit * 0.18 + capexLight * 0.08 + readiness * 0.12, 0, 99);
-}
-
-function decisionSignal(confidence, netAnnualSavings, paybackYears, process, selected) {
-  if (netAnnualSavings < 0) {
-    return {
-      title: "Hold - economics not ready",
-      tone: "risk",
-      text: "The scenario does not yet generate positive annual savings. Reduce integration cost, improve utilization, use RaaS, or choose a more suitable process/technology mix."
-    };
-  }
-  if (confidence >= 75 && paybackYears <= 2.5) {
-    return {
-      title: "Phase 1 Go - hybrid workforce pilot",
-      tone: "go",
-      text: `${selected.robot.name} is a credible primary option for ${process.name}. Start with CapEx-light pricing, a small controlled pilot, and KPI-linked OEM service levels.`
-    };
-  }
-  if (process.pilotFit.includes("Specialist") && selected.robot.technology === "humanoid") {
-    return {
-      title: "Redirect - specialist robot first",
-      tone: "watch",
-      text: "This process is physically demanding or high-throughput. Use humanoids only for exception handling; evaluate specialist robotics for the core flow."
-    };
-  }
-  return {
-    title: "Pilot with guardrails",
-    tone: "watch",
-    text: "The process has strategic potential, but the pilot must prove cycle time, safety, uptime, WMS integration, and service economics before scaling."
-  };
-}
-
-function simpleNpv(netAnnualSavings, startupCapex, discountRate, years) {
-  let npv = -startupCapex;
-  for (let year = 1; year <= years; year += 1) {
-    npv += netAnnualSavings / Math.pow(1 + discountRate, year);
-  }
-  return npv;
-}
-
-function buildGuardrails(model) {
-  const process = model.process;
-  const params = model.params;
-  const guardrails = [];
-
-  if (params.avgPayloadKg > 18 && !["robotic-forklift", "amr", "robotic-arm", "warehouse-specialist"].includes(model.robot.technology)) {
-    guardrails.push({
-      title: "Payload risk",
-      text: "Average payload is above many humanoid comfort zones. Consider robotic forklifts, AMRs, palletizing cells, lift-assist equipment, or engineered workstations."
-    });
-  }
-  if (params.variability > 72 || (params.exceptionRate || 0) > 15) {
-    guardrails.push({
-      title: "High variability / exception rate",
-      text: "Variable SKUs, packaging, and exception logic increase autonomy risk. Use human-in-the-loop controls until exception rates stabilize."
-    });
-  }
-  if (process.pilotFit.includes("Specialist")) {
-    guardrails.push({
-      title: "Specialist automation may win",
-      text: "This process may produce better ROI with purpose-built warehouse robotics. Keep humanoids for exceptions or flexible support."
-    });
-  }
-  if ((params.layoutReadiness || 65) < 50) {
-    guardrails.push({
-      title: "Layout readiness gap",
-      text: "Low layout readiness increases commissioning effort. Validate aisle width, floor condition, traffic rules, charging, Wi-Fi/5G, and safety zones."
-    });
-  }
-  if ((params.wmsIntegration || 65) < 55) {
-    guardrails.push({
-      title: "Integration risk",
-      text: "WMS/WES integration readiness is low. Start with a read-only telemetry pilot or limited task interface before closed-loop orchestration."
-    });
-  }
-  if (model.paybackYears > 3 || model.netAnnualSavings < 0) {
-    guardrails.push({
-      title: "Commercial model needs redesign",
-      text: "Use RaaS or performance-linked leasing, reduce custom integration, increase volume density, or move the pilot to a higher-cost labor region."
-    });
-  }
-  if (guardrails.length === 0) {
-    guardrails.push({
-      title: "Good pilot candidate",
-      text: "The scenario has a reasonable balance of process repeatability, labor cost, task fit, and CapEx-light deployment potential."
-    });
-  }
-  return guardrails;
-}
-
-function exportState(state) {
-  const payload = {
-    version: "2.0",
-    exportedAt: new Date().toISOString(),
-    state
-  };
-  return JSON.stringify(payload, null, 2);
-}
-
-function normalizeImportedState(payload) {
-  const next = payload.state || payload;
-  if (!next.processId || !next.regionId) throw new Error("Invalid scenario file.");
-  return {
-    processId: next.processId,
-    regionId: next.regionId,
-    commercialModel: next.commercialModel || "raas",
-    scenarioName: next.scenarioName || "Imported scenario",
-    params: next.params || {},
-    selectedRobotId: next.selectedRobotId || null,
-    customProcess: next.customProcess || undefined,
-    uploadedAssets: next.uploadedAssets || []
-  };
-}
-
-/* ===== src-modules/simulation3d.js ===== */
-const COLORS = {
-  stageTop: "#07101f",
-  stageBottom: "#111827",
-  floorA: "#202a3d",
-  floorB: "#121a2b",
-  floorLine: "rgba(150, 180, 220, 0.16)",
-  rackFace: "#5e718c",
-  rackSide: "#37465f",
-  rackTop: "#9fb4cf",
-  steel: "#c9d6e5",
-  steelDark: "#55657b",
-  glass: "#6ed7ff",
-  robot: "#ef2f73",
-  robotGlow: "rgba(239, 47, 115, 0.45)",
-  human: "#38bdf8",
-  humanGlow: "rgba(56, 189, 248, 0.38)",
-  green: "#23c487",
-  amber: "#f7c948",
-  navy: "#0b1020",
-  text: "#eaf2ff",
-  muted: "#9fb0c8",
-  blue: "#3c6df0"
-};
-
-const ZONES = [
-  { name: "Receiving", x: 5, y: 7, w: 24, d: 18, color: "rgba(56,189,248,0.18)" },
-  { name: "Reserve storage", x: 34, y: 10, w: 36, d: 44, color: "rgba(35,196,135,0.14)" },
-  { name: "Pick module", x: 75, y: 12, w: 21, d: 25, color: "rgba(239,47,115,0.16)" },
-  { name: "Pack / VAS", x: 76, y: 42, w: 22, d: 17, color: "rgba(247,201,72,0.16)" },
-  { name: "Outbound", x: 48, y: 58, w: 45, d: 13, color: "rgba(60,109,240,0.16)" }
-];
-
-const DEFAULT_PATHS = {
-  "case-picking": [{ x: 15, y: 15 }, { x: 42, y: 20 }, { x: 63, y: 30 }, { x: 83, y: 24 }, { x: 83, y: 48 }, { x: 64, y: 63 }],
-  "inbound-receiving": [{ x: 10, y: 14 }, { x: 18, y: 20 }, { x: 34, y: 26 }, { x: 52, y: 26 }, { x: 56, y: 50 }],
-  "putaway": [{ x: 12, y: 18 }, { x: 28, y: 24 }, { x: 46, y: 18 }, { x: 64, y: 20 }, { x: 68, y: 48 }],
-  "piece-picking": [{ x: 20, y: 18 }, { x: 42, y: 16 }, { x: 64, y: 18 }, { x: 82, y: 24 }, { x: 86, y: 50 }, { x: 72, y: 64 }],
-  "g2p-replenishment": [{ x: 14, y: 18 }, { x: 30, y: 18 }, { x: 48, y: 34 }, { x: 68, y: 44 }, { x: 86, y: 48 }],
-  "container-unloading": [{ x: 6, y: 10 }, { x: 13, y: 16 }, { x: 22, y: 18 }, { x: 34, y: 20 }, { x: 48, y: 23 }],
-  "inventory-count": [{ x: 16, y: 14 }, { x: 34, y: 12 }, { x: 66, y: 14 }, { x: 66, y: 48 }, { x: 34, y: 50 }, { x: 20, y: 62 }],
-  "returns-processing": [{ x: 54, y: 64 }, { x: 76, y: 52 }, { x: 85, y: 45 }, { x: 78, y: 28 }, { x: 54, y: 24 }],
-  "packing-qc": [{ x: 78, y: 48 }, { x: 86, y: 48 }, { x: 88, y: 56 }, { x: 66, y: 64 }, { x: 50, y: 62 }],
-  "cross-dock-sort": [{ x: 12, y: 18 }, { x: 32, y: 32 }, { x: 52, y: 48 }, { x: 70, y: 60 }, { x: 86, y: 62 }],
-  "truck-loading": [{ x: 58, y: 48 }, { x: 66, y: 58 }, { x: 78, y: 64 }, { x: 88, y: 70 }, { x: 96, y: 69 }],
-  "palletizing": [{ x: 70, y: 54 }, { x: 80, y: 50 }, { x: 88, y: 58 }, { x: 68, y: 64 }, { x: 52, y: 62 }],
-  "pallet-movement": [{ x: 8, y: 18 }, { x: 24, y: 28 }, { x: 42, y: 42 }, { x: 66, y: 56 }, { x: 88, y: 66 }],
-  "kitting-vas": [{ x: 76, y: 44 }, { x: 82, y: 42 }, { x: 84, y: 54 }, { x: 74, y: 62 }, { x: 54, y: 62 }],
-  "sorter-induction": [{ x: 22, y: 56 }, { x: 38, y: 58 }, { x: 56, y: 60 }, { x: 74, y: 62 }, { x: 92, y: 62 }],
-  "yard-dock-inspection": [{ x: 8, y: 8 }, { x: 8, y: 24 }, { x: 22, y: 42 }, { x: 52, y: 66 }, { x: 92, y: 69 }]
-};
-
-class WarehouseSimulation {
-  constructor(canvas) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext("2d");
-    this.model = null;
-    this.running = false;
-    this.elapsed = 0;
-    this.lastTime = null;
-    this.speed = 1;
-    this.dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-    this.resizeObserver = new ResizeObserver(() => this.resize());
-    this.resizeObserver.observe(canvas);
-    this.resize();
-    this.loop = this.loop.bind(this);
-    requestAnimationFrame(this.loop);
-  }
-
-  setModel(model) {
-    this.model = model;
-    this.reset(false);
-    this.render();
-  }
-
-  setSpeed(value) {
-    this.speed = Number(value) || 1;
-  }
-
-  play() { this.running = true; }
-  pause() { this.running = false; }
-
-  reset(stop = true) {
-    this.elapsed = 0;
-    this.lastTime = null;
-    if (stop) this.running = false;
-    this.render();
-  }
-
-  resize() {
-    const rect = this.canvas.getBoundingClientRect();
-    const width = Math.max(760, Math.floor(rect.width || this.canvas.width));
-    const height = Math.max(620, Math.floor(rect.height || this.canvas.height));
-    this.canvas.width = Math.floor(width * this.dpr);
-    this.canvas.height = Math.floor(height * this.dpr);
-    this.canvas.style.height = `${height}px`;
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.width = width;
-    this.height = height;
-    this.scale = Math.min(width / 150, height / 98);
-    this.originX = width * 0.5;
-    this.originY = height * 0.1;
-    this.render();
-  }
-
-  loop(timestamp) {
-    if (this.running) {
-      if (!this.lastTime) this.lastTime = timestamp;
-      const dt = Math.min(0.05, (timestamp - this.lastTime) / 1000);
-      this.elapsed += dt * this.speed;
-      this.lastTime = timestamp;
-      this.render();
-    } else {
-      this.lastTime = timestamp;
+const STORAGE_KEY = 'hybrid-workforce-v2';
+function validateWorkspace(value) {
+  const errors = [];
+  if (!value || value.schemaVersion !== APP_SCHEMA || !Array.isArray(value.cases) || !Array.isArray(value.configs)) return ['This file is not a version 2 workspace.'];
+  if ([...value.cases,...value.configs].some(x=>!x||typeof x!=='object'||typeof x.id!=='string'||['__proto__','prototype','constructor'].includes(x.id))) return ['Every case and configuration needs a valid record identifier.'];
+  if (!value.cases.length || value.cases.length > 200 || !value.configs.length || value.configs.length > 500) errors.push('Use 1–200 cases and 1–500 configurations.');
+  if (new Set(value.cases.map(c => c.id)).size !== value.cases.length || new Set(value.configs.map(c => c.id)).size !== value.configs.length) errors.push('Case and configuration identifiers must be unique.');
+  const configIds = new Set(value.configs.map(v => v.id));
+  for (const c of value.cases) {
+    if (!c || !c.id || !c.name || !c.site || !c.baseline || !c.economics || !Array.isArray(c.actions) || !Array.isArray(c.scenarios) || !c.deployment || !Array.isArray(c.sources) || !Array.isArray(c.observations) || !Array.isArray(c.deployment.assets) || !Array.isArray(c.deployment.testResults) || !c.deployment.checklist || !c.answers || !Array.isArray(c.issues) || !Array.isArray(c.history)) { errors.push('A case is incomplete.'); continue; }
+    if (c.lastTab && !CASE_TABS.includes(c.lastTab)) errors.push(`${c.name}: the saved case stage is invalid.`);
+    if ([...c.actions,...c.scenarios,...c.sources,...c.observations,...c.deployment.assets,...c.deployment.testResults,...c.issues].some(x=>!x||typeof x!=='object')) { errors.push(`${c.name}: a child record is invalid.`); continue; }
+    if (c.actions?.length > 500 || !c.scenarios.length || c.scenarios.length > 500 || c.observations.length > 10000) { errors.push('A case needs at least one option and must stay within the local record limits.'); continue; }
+    // Drafts may have no actions or unknown requirements. Structural errors still fail import.
+    for (const msg of validateCase(c)) if (/cycle|unique|dependency/.test(msg)) errors.push(`${c.name}: ${msg}`);
+    for (const a of c.actions) for (const key of ['seconds','frequency','payloadKg','reachM','aisleM']) if (a[key] != null && (typeof a[key] !== 'number' || !Number.isFinite(a[key]) || a[key] < 0)) errors.push(`${c.name}: invalid action ${key}.`);
+    const allowedKeys = ['demandDaily','peakFactor','shifts','shiftHours','daysYear','peoplePerShift','humanUtilPct','salaryAnnual','minPeoplePerShift','staffingCover','qualityTargetPct'];
+    for (const key of allowedKeys) if (c.baseline[key] != null && (typeof c.baseline[key] !== 'number' || !Number.isFinite(c.baseline[key]) || c.baseline[key] < 0)) errors.push(`${c.name}: invalid ${key}.`);
+    for (const [key, val] of Object.entries(c.economics || {})) if (typeof val === 'number' && (!Number.isFinite(val) || val < 0)) errors.push(`${c.name}: invalid ${key}.`);
+    const actionIds = new Set(c.actions?.map(a => a.id));
+    for (const s of c.scenarios) {
+      if (!s || !s.id || !s.name || !s.assignments || !s.counts) { errors.push('A scenario is incomplete.'); continue; }
+      if (Object.entries(s.assignments).some(([id, actor]) => !actionIds.has(id) || actor !== 'human' && !configIds.has(actor))) errors.push(`${c.name}: an assignment has a missing action or configuration.`);
+      if (Object.entries(s.counts).some(([id, count]) => !configIds.has(id) || !Number.isInteger(count) || count < 0 || count > 100)) errors.push(`${c.name}: invalid fleet counts.`);
     }
-    requestAnimationFrame(this.loop);
+    for (const o of c.observations) errors.push(...validateObservation(o).map(msg => `${c.name}: ${msg}`));
   }
-
-  get path() {
-    if (!this.model) return DEFAULT_PATHS["case-picking"];
-    return this.model.process.layoutPath || DEFAULT_PATHS[this.model.process.id] || DEFAULT_PATHS["case-picking"];
+  for (const v of value.configs) {
+    if (!v.id || !v.name || !Array.isArray(v.skills) || !v.times || typeof v.times !== 'object') errors.push('A configuration is incomplete.');
+    for (const key of ['payloadKg','reachM','minAisleM','successPct','interventionPct','recoverySec','chargePct','downtimePct','price','leaseMonthly','supportAnnual','energyAnnual']) if (v[key] != null && (typeof v[key] !== 'number' || !Number.isFinite(v[key]) || v[key] < 0)) errors.push(`${v.name}: invalid ${key}.`);
+    if (Object.values(v.times || {}).some(n => typeof n !== 'number' || !Number.isFinite(n) || n <= 0)) errors.push(`${v.name}: task times must be positive numbers.`);
   }
-
-  currentStep(progress) {
-    if (!this.model) return 0;
-    const steps = this.model.process.steps.length;
-    return Math.min(steps - 1, Math.floor(progress * steps));
-  }
-
-  currentTelemetry() {
-    if (!this.model) return null;
-    const ratio = Math.max(0.35, this.model.manualCycleSec / Math.max(1, this.model.robotCycleSec));
-    const robotProgress = (this.elapsed / 22 * ratio) % 1;
-    const humanProgress = (this.elapsed / 22) % 1;
-    return { robotProgress, humanProgress, activeStep: this.currentStep(robotProgress) };
-  }
-
-  project(point) {
-    const x = point.x;
-    const y = point.y;
-    const z = point.z || 0;
-    return {
-      x: this.originX + (x - y) * this.scale,
-      y: this.originY + (x + y) * this.scale * 0.52 - z * this.scale * 0.92
-    };
-  }
-
-  render() {
-    const ctx = this.ctx;
-    if (!ctx || !this.width || !this.height) return;
-    ctx.clearRect(0, 0, this.width, this.height);
-    this.drawBackground();
-    this.drawFloor();
-    this.drawZones();
-    this.drawRacks();
-    this.drawDocksAndTrucks();
-    this.drawConveyorsAndCells();
-    this.drawPaths();
-    this.drawActors();
-    this.drawFloatingKpis();
-    this.drawSceneTitle();
-  }
-
-  drawBackground() {
-    const ctx = this.ctx;
-    const gradient = ctx.createLinearGradient(0, 0, 0, this.height);
-    gradient.addColorStop(0, COLORS.stageTop);
-    gradient.addColorStop(0.62, "#0e1828");
-    gradient.addColorStop(1, COLORS.stageBottom);
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, this.width, this.height);
-
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    const glow1 = ctx.createRadialGradient(this.width * 0.18, this.height * 0.1, 0, this.width * 0.18, this.height * 0.1, this.width * 0.38);
-    glow1.addColorStop(0, "rgba(43,194,255,0.32)");
-    glow1.addColorStop(1, "rgba(43,194,255,0)");
-    ctx.fillStyle = glow1;
-    ctx.fillRect(0, 0, this.width, this.height);
-    const glow2 = ctx.createRadialGradient(this.width * 0.82, this.height * 0.18, 0, this.width * 0.82, this.height * 0.18, this.width * 0.32);
-    glow2.addColorStop(0, "rgba(239,47,115,0.28)");
-    glow2.addColorStop(1, "rgba(239,47,115,0)");
-    ctx.fillStyle = glow2;
-    ctx.fillRect(0, 0, this.width, this.height);
-    ctx.restore();
-  }
-
-  drawFloor() {
-    const ctx = this.ctx;
-    const corners = [
-      this.project({ x: 0, y: 0, z: 0 }),
-      this.project({ x: 105, y: 0, z: 0 }),
-      this.project({ x: 105, y: 75, z: 0 }),
-      this.project({ x: 0, y: 75, z: 0 })
-    ];
-    ctx.save();
-    ctx.beginPath();
-    corners.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-    ctx.closePath();
-    const floorGrad = ctx.createLinearGradient(this.width * 0.22, this.height * 0.2, this.width * 0.8, this.height * 0.92);
-    floorGrad.addColorStop(0, COLORS.floorA);
-    floorGrad.addColorStop(1, COLORS.floorB);
-    ctx.fillStyle = floorGrad;
-    ctx.strokeStyle = "rgba(230,240,255,0.18)";
-    ctx.lineWidth = 1.5;
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.strokeStyle = COLORS.floorLine;
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= 105; x += 5) {
-      const p1 = this.project({ x, y: 0 });
-      const p2 = this.project({ x, y: 75 });
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-    }
-    for (let y = 0; y <= 75; y += 5) {
-      const p1 = this.project({ x: 0, y });
-      const p2 = this.project({ x: 105, y });
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-    }
-    this.drawAisleLighting();
-    ctx.restore();
-  }
-
-  drawAisleLighting() {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    for (let i = 0; i < 5; i += 1) {
-      const x = 34 + i * 14;
-      const p1 = this.project({ x, y: 6, z: 0.02 });
-      const p2 = this.project({ x, y: 70, z: 0.02 });
-      const gradient = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
-      gradient.addColorStop(0, "rgba(43,194,255,0.02)");
-      gradient.addColorStop(0.5, "rgba(43,194,255,0.12)");
-      gradient.addColorStop(1, "rgba(43,194,255,0.02)");
-      ctx.strokeStyle = gradient;
-      ctx.lineWidth = 7;
-      ctx.beginPath();
-      ctx.moveTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  drawZones() {
-    ZONES.forEach(zone => this.drawIsoZone(zone.x, zone.y, zone.w, zone.d, zone.color, zone.name));
-  }
-
-  drawIsoZone(x, y, w, d, fill, label) {
-    const ctx = this.ctx;
-    const points = [this.project({ x, y }), this.project({ x: x + w, y }), this.project({ x: x + w, y: y + d }), this.project({ x, y: y + d })];
-    ctx.save();
-    ctx.beginPath();
-    points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-    ctx.closePath();
-    ctx.fillStyle = fill;
-    ctx.fill();
-    ctx.strokeStyle = "rgba(220,235,255,0.16)";
-    ctx.stroke();
-    const center = this.project({ x: x + w / 2, y: y + d / 2, z: 0.2 });
-    ctx.fillStyle = "rgba(234,242,255,0.85)";
-    ctx.font = "800 12px Inter, Segoe UI, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(label, center.x, center.y + 4);
-    ctx.restore();
-  }
-
-  drawRacks() {
-    const rackRows = [13, 23, 33, 43];
-    rackRows.forEach((y, row) => {
-      for (let x = 36; x <= 64; x += 10) {
-        const height = 8 + (row % 2) * 1.2;
-        this.drawRack(x, y, 7.2, 3.1, height, row);
-      }
-    });
-    for (let x = 78; x <= 91; x += 6) this.drawCuboid(x, 18, 4.6, 12, 4.2, "#85465e", "#63354a", "#d7799c", true);
-  }
-
-  drawRack(x, y, w, d, h, row) {
-    this.drawCuboid(x, y, w, d, h, COLORS.rackFace, COLORS.rackSide, COLORS.rackTop, true);
-    for (let level = 1.8; level < h; level += 1.9) {
-      const a = this.project({ x, y: y + d, z: level });
-      const b = this.project({ x: x + w, y: y + d, z: level });
-      this.ctx.save();
-      this.ctx.strokeStyle = "rgba(255,255,255,0.22)";
-      this.ctx.lineWidth = 1;
-      this.ctx.beginPath();
-      this.ctx.moveTo(a.x, a.y);
-      this.ctx.lineTo(b.x, b.y);
-      this.ctx.stroke();
-      this.ctx.restore();
-    }
-    if ((x + y + row) % 3 === 0) this.drawPallet(x + 1, y + 0.5, 0.2);
-  }
-
-  drawDocksAndTrucks() {
-    for (let y = 7; y <= 23; y += 7) {
-      this.drawCuboid(0, y, 4, 5, 3.2, "#4b5b72", "#2e3b50", "#91a4bf", true);
-      this.drawTruck(-8, y - 0.4, 8, 6);
-    }
-    for (let x = 50; x <= 86; x += 12) {
-      this.drawCuboid(x, 70, 8, 3, 2.2, "#4d617c", "#304057", "#9fb4cf", true);
-    }
-  }
-
-  drawTruck(x, y, w, d) {
-    this.drawCuboid(x, y, w, d, 4.5, "#243249", "#152037", "#52647e", true);
-  }
-
-  drawConveyorsAndCells() {
-    for (let i = 0; i < 4; i += 1) this.drawCuboid(58 + i * 8, 60, 6, 2.4, 1.1, "#708197", "#526177", "#c7d2e1", true);
-    this.drawCuboid(82, 50, 9, 5, 1.5, "#293a54", "#1b293e", "#64748b", true);
-    this.drawRobotArmCell(84, 51, 1.6);
-  }
-
-  drawRobotArmCell(x, y, z) {
-    const ctx = this.ctx;
-    const base = this.project({ x, y, z });
-    const elbow = this.project({ x: x + 1.8, y: y - 0.8, z: z + 3.5 });
-    const wrist = this.project({ x: x + 4.2, y: y - 0.4, z: z + 5.0 });
-    ctx.save();
-    ctx.strokeStyle = "#dce8f5";
-    ctx.lineWidth = 7;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(base.x, base.y);
-    ctx.lineTo(elbow.x, elbow.y);
-    ctx.lineTo(wrist.x, wrist.y);
-    ctx.stroke();
-    ctx.fillStyle = COLORS.glass;
-    [base, elbow, wrist].forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill(); });
-    ctx.restore();
-  }
-
-  drawCuboid(x, y, w, d, h, face, side, top, shadow = false) {
-    const ctx = this.ctx;
-    const p000 = this.project({ x, y, z: 0 });
-    const p100 = this.project({ x: x + w, y, z: 0 });
-    const p110 = this.project({ x: x + w, y: y + d, z: 0 });
-    const p010 = this.project({ x, y: y + d, z: 0 });
-    const p001 = this.project({ x, y, z: h });
-    const p101 = this.project({ x: x + w, y, z: h });
-    const p111 = this.project({ x: x + w, y: y + d, z: h });
-    const p011 = this.project({ x, y: y + d, z: h });
-
-    ctx.save();
-    if (shadow) {
-      ctx.globalAlpha = 0.22;
-      this.fillPoly([p000, p100, p110, p010], "#000000");
-      ctx.globalAlpha = 1;
-    }
-    this.fillPoly([p010, p110, p111, p011], side);
-    this.fillPoly([p100, p110, p111, p101], face);
-    this.fillPoly([p001, p101, p111, p011], top);
-    ctx.strokeStyle = "rgba(235,245,255,0.16)";
-    ctx.lineWidth = 1;
-    [[p010, p110, p111, p011], [p100, p110, p111, p101], [p001, p101, p111, p011]].forEach(poly => this.strokePoly(poly));
-    ctx.restore();
-  }
-
-  fillPoly(points, fill) {
-    const ctx = this.ctx;
-    ctx.beginPath();
-    points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-    ctx.closePath();
-    ctx.fillStyle = fill;
-    ctx.fill();
-  }
-
-  strokePoly(points) {
-    const ctx = this.ctx;
-    ctx.beginPath();
-    points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-    ctx.closePath();
-    ctx.stroke();
-  }
-
-  drawPaths() {
-    const ctx = this.ctx;
-    const path = this.path;
-    const robotPath = path.map(p => this.project({ x: p.x, y: p.y, z: 0.18 }));
-    const humanPath = path.map(p => this.project({ x: p.x - 3, y: p.y + 2, z: 0.18 }));
-    this.drawPathLine(humanPath, COLORS.human, 0.34, 5);
-    this.drawPathLine(robotPath, COLORS.robot, 0.78, 7);
-
-    const telemetry = this.currentTelemetry();
-    const activeIndex = telemetry ? telemetry.activeStep : 0;
-    path.forEach((p, idx) => {
-      const projected = this.project({ x: p.x, y: p.y, z: 0.5 });
-      ctx.save();
-      ctx.shadowColor = idx === activeIndex ? COLORS.green : "rgba(255,255,255,0.25)";
-      ctx.shadowBlur = idx === activeIndex ? 20 : 8;
-      ctx.beginPath();
-      ctx.arc(projected.x, projected.y, idx === activeIndex ? 9 : 5, 0, Math.PI * 2);
-      ctx.fillStyle = idx === activeIndex ? COLORS.green : "rgba(255,255,255,0.95)";
-      ctx.strokeStyle = idx === activeIndex ? "#eafff6" : "rgba(220,235,255,0.5)";
-      ctx.lineWidth = idx === activeIndex ? 3 : 1.5;
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-    });
-  }
-
-  drawPathLine(points, color, alpha, width) {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 18;
-    ctx.beginPath();
-    points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  drawActors() {
-    const telemetry = this.currentTelemetry() || { robotProgress: 0, humanProgress: 0 };
-    const robotPos = this.interpolatePath(this.path, telemetry.robotProgress);
-    const humanPos = this.interpolatePath(this.path.map(p => ({ x: p.x - 3, y: p.y + 2 })), telemetry.humanProgress);
-    this.drawShadow(robotPos.x, robotPos.y, 4.4, COLORS.robotGlow);
-    this.drawShadow(humanPos.x, humanPos.y, 3.4, COLORS.humanGlow);
-    this.drawHumanAvatar(humanPos.x, humanPos.y, "Manual worker");
-    this.drawRobotAvatar(robotPos.x, robotPos.y, this.model?.robot?.technology || "humanoid");
-    if ((this.model?.robot?.technology || "humanoid") === "amr") this.drawPallet(robotPos.x + 1.8, robotPos.y - 1.1, 1.6);
-    else this.drawCarton(robotPos.x + 1.6, robotPos.y - 0.6, 2.2);
-  }
-
-  interpolatePath(path, progress) {
-    if (!path.length) return { x: 0, y: 0 };
-    const p = (progress % 1) * (path.length - 1);
-    const i = Math.floor(p);
-    const t = p - i;
-    const a = path[i];
-    const b = path[Math.min(path.length - 1, i + 1)];
-    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-  }
-
-  drawShadow(x, y, r, color) {
-    const ctx = this.ctx;
-    const p = this.project({ x, y, z: 0.05 });
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.ellipse(p.x, p.y + 4, r * this.scale * 0.75, r * this.scale * 0.25, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  drawHumanAvatar(x, y, label) {
-    const ctx = this.ctx;
-    const foot = this.project({ x, y, z: 0 });
-    const hip = this.project({ x, y, z: 3.2 });
-    const chest = this.project({ x, y, z: 6.0 });
-    const head = this.project({ x, y, z: 7.8 });
-    const sway = Math.sin(this.elapsed * 6) * 3.2;
-    ctx.save();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = "#d1d5db";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(hip.x, hip.y);
-    ctx.lineTo(foot.x - 5 + sway, foot.y + 8);
-    ctx.moveTo(hip.x, hip.y);
-    ctx.lineTo(foot.x + 5 - sway, foot.y + 8);
-    ctx.stroke();
-
-    ctx.strokeStyle = "#f8fafc";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(chest.x, chest.y + 3);
-    ctx.lineTo(chest.x - 11, chest.y + 18 + sway * 0.5);
-    ctx.moveTo(chest.x, chest.y + 3);
-    ctx.lineTo(chest.x + 12, chest.y + 17 - sway * 0.5);
-    ctx.stroke();
-
-    const vest = ctx.createLinearGradient(chest.x - 16, chest.y, chest.x + 16, hip.y + 20);
-    vest.addColorStop(0, "#38bdf8");
-    vest.addColorStop(1, "#1d4ed8");
-    ctx.fillStyle = vest;
-    roundedRect(ctx, chest.x - 11, chest.y - 1, 22, hip.y - chest.y + 11, 6);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.35)";
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(head.x, head.y, 9.5, 0, Math.PI * 2);
-    ctx.fillStyle = "#d6b08d";
-    ctx.fill();
-    ctx.strokeStyle = "#f7c948";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.fillStyle = "rgba(234,242,255,0.88)";
-    ctx.font = "800 11px Inter, Segoe UI, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(label, head.x, head.y - 16);
-    ctx.restore();
-  }
-
-  drawRobotAvatar(x, y, technology) {
-    if (["amr", "robotic-forklift", "vision"].includes(technology)) return this.drawMobileRobot(x, y, technology);
-    if (["robotic-arm", "warehouse-specialist"].includes(technology)) return this.drawMobileManipulator(x, y, technology);
-    return this.drawMetalHumanoid(x, y);
-  }
-
-  drawMetalHumanoid(x, y) {
-    const ctx = this.ctx;
-    const foot = this.project({ x, y, z: 0 });
-    const hip = this.project({ x, y, z: 3.5 });
-    const chest = this.project({ x, y, z: 6.5 });
-    const head = this.project({ x, y, z: 8.25 });
-    const sway = Math.sin(this.elapsed * 6.5) * 3.8;
-    ctx.save();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.shadowColor = COLORS.robotGlow;
-    ctx.shadowBlur = 18;
-
-    ctx.strokeStyle = COLORS.steel;
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(hip.x, hip.y);
-    ctx.lineTo(foot.x - 6 + sway, foot.y + 8);
-    ctx.moveTo(hip.x, hip.y);
-    ctx.lineTo(foot.x + 6 - sway, foot.y + 8);
-    ctx.stroke();
-
-    ctx.strokeStyle = "#e8f1fb";
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(chest.x, chest.y + 3);
-    ctx.lineTo(chest.x - 12, chest.y + 19 + sway * 0.5);
-    ctx.moveTo(chest.x, chest.y + 3);
-    ctx.lineTo(chest.x + 14, chest.y + 18 - sway * 0.5);
-    ctx.stroke();
-
-    const bodyGradient = ctx.createLinearGradient(chest.x - 18, chest.y - 10, chest.x + 18, hip.y + 18);
-    bodyGradient.addColorStop(0, "#f8fbff");
-    bodyGradient.addColorStop(0.45, "#cbd5e1");
-    bodyGradient.addColorStop(1, "#64748b");
-    ctx.fillStyle = bodyGradient;
-    ctx.strokeStyle = COLORS.robot;
-    ctx.lineWidth = 1.7;
-    roundedRect(ctx, chest.x - 13, chest.y - 2, 26, hip.y - chest.y + 12, 8);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(head.x, head.y, 11, 0, Math.PI * 2);
-    ctx.fillStyle = "#e5edf7";
-    ctx.fill();
-    ctx.strokeStyle = COLORS.robot;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    ctx.fillStyle = "#07101f";
-    roundedRect(ctx, head.x - 8, head.y - 3, 16, 6, 3);
-    ctx.fill();
-    ctx.fillStyle = COLORS.robot;
-    ctx.beginPath();
-    ctx.arc(head.x - 4, head.y, 1.8, 0, Math.PI * 2);
-    ctx.arc(head.x + 4, head.y, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "rgba(234,242,255,0.92)";
-    ctx.font = "800 11px Inter, Segoe UI, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("Hybrid robot", head.x, head.y - 18);
-    ctx.restore();
-  }
-
-  drawMobileRobot(x, y, technology) {
-    const label = technology === "robotic-forklift" ? "Auto forklift" : technology === "vision" ? "Vision robot" : "AMR";
-    this.drawCuboid(x - 2.5, y - 1.8, 5, 3.6, 1.4, "#4f46e5", "#312e81", "#93c5fd", true);
-    if (technology === "robotic-forklift") {
-      this.drawCuboid(x + 2.2, y - 1.6, 0.5, 3.4, 4.2, "#e2e8f0", "#94a3b8", "#f8fafc", false);
-      this.drawCuboid(x + 2.7, y - 1.8, 3.5, 0.4, 0.25, "#e2e8f0", "#94a3b8", "#f8fafc", false);
-    }
-    if (technology === "vision") this.drawCuboid(x - 0.4, y - 0.4, 0.8, 0.8, 5.2, "#e2e8f0", "#94a3b8", "#f8fafc", false);
-    const p = this.project({ x, y, z: 3.2 });
-    this.ctx.save();
-    this.ctx.fillStyle = "rgba(234,242,255,0.92)";
-    this.ctx.font = "800 11px Inter, Segoe UI, sans-serif";
-    this.ctx.textAlign = "center";
-    this.ctx.fillText(label, p.x, p.y - 10);
-    this.ctx.restore();
-  }
-
-  drawMobileManipulator(x, y, technology) {
-    this.drawCuboid(x - 2.8, y - 1.8, 5.6, 3.6, 1.6, "#27364e", "#162033", "#6b7d98", true);
-    this.drawRobotArmCell(x, y, 1.6);
-    const p = this.project({ x, y, z: 6.2 });
-    this.ctx.save();
-    this.ctx.fillStyle = "rgba(234,242,255,0.92)";
-    this.ctx.font = "800 11px Inter, Segoe UI, sans-serif";
-    this.ctx.textAlign = "center";
-    this.ctx.fillText(technology === "warehouse-specialist" ? "Case robot" : "Robot arm", p.x, p.y - 10);
-    this.ctx.restore();
-  }
-
-  drawPallet(x, y, z) {
-    this.drawCuboid(x, y, 4.6, 3.2, 0.55, "#8a5a2b", "#5b3a1d", "#d6a05d", true);
-    this.drawCuboid(x + 0.3, y + 0.25, 4, 2.6, 1.8, "#a87946", "#7b5432", "#e5b678", true);
-  }
-
-  drawCarton(x, y, z) {
-    this.drawCuboid(x, y, 3.2, 2.4, 2.2, "#c68642", "#8f5728", "#ffd18a", true);
-  }
-
-  drawFloatingKpis() {
-    if (!this.model) return;
-    const ctx = this.ctx;
-    const cards = [
-      { label: "Primary units", value: this.model.robotsRequired.toFixed(0), color: COLORS.robot },
-      { label: "FTE offset", value: this.model.fteOffset.toFixed(1), color: COLORS.green },
-      { label: "ROI", value: `${this.model.roi.toFixed(0)}%`, color: COLORS.blue }
-    ];
-    ctx.save();
-    cards.forEach((card, index) => {
-      const x = 24;
-      const y = 24 + index * 72;
-      ctx.fillStyle = "rgba(7, 16, 31, 0.74)";
-      ctx.strokeStyle = "rgba(230,240,255,0.16)";
-      ctx.lineWidth = 1;
-      roundedRect(ctx, x, y, 182, 58, 18);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = card.color;
-      ctx.shadowColor = card.color;
-      ctx.shadowBlur = 12;
-      ctx.beginPath();
-      ctx.arc(x + 20, y + 29, 7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = COLORS.text;
-      ctx.font = "900 18px Inter, Segoe UI, sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText(card.value, x + 38, y + 28);
-      ctx.fillStyle = COLORS.muted;
-      ctx.font = "700 11px Inter, Segoe UI, sans-serif";
-      ctx.fillText(card.label, x + 38, y + 44);
-    });
-    ctx.restore();
-  }
-
-  drawSceneTitle() {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.fillStyle = "rgba(7,16,31,0.68)";
-    roundedRect(ctx, this.width - 270, 22, 244, 58, 18);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(230,240,255,0.16)";
-    ctx.stroke();
-    ctx.fillStyle = COLORS.text;
-    ctx.font = "900 13px Inter, Segoe UI, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText("Omniverse-style digital twin", this.width - 248, 45);
-    ctx.fillStyle = COLORS.muted;
-    ctx.font = "700 11px Inter, Segoe UI, sans-serif";
-    ctx.fillText("Offline canvas rendering - no external 3D engine", this.width - 248, 63);
-    ctx.restore();
-  }
+  return [...new Set(errors)];
 }
 
-function roundedRect(ctx, x, y, width, height, radius) {
-  const r = Math.min(radius, Math.abs(width) / 2, Math.abs(height) / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + width, y, x + width, y + height, r);
-  ctx.arcTo(x + width, y + height, x, y + height, r);
-  ctx.arcTo(x, y + height, x, y, r);
-  ctx.arcTo(x, y, x + width, y, r);
-  ctx.closePath();
-}
-
-/* ===== src-modules/assistant.js ===== */
-
-function answerQuestion(question, model) {
-  const q = question.toLowerCase();
-  const top = model.selected.robot;
-  const guardrails = buildGuardrails(model);
-  const mix = model.automationMix.map(item => `${item.label}: ${item.robot.company}`).join(" | ");
-
-  if (containsAny(q, ["why", "recommend", "top", "selected", "robot", "vendor", "oem"])) {
-    return `The current primary recommendation is **${top.name}** because it scores **${model.selected.score.toFixed(0)}/100** against the capability requirements for **${model.process.name}**. This is not a single-robot answer: the suggested hybrid mix is **${mix}**. Treat it as a pilot design and vendor shortlist, not as a procurement decision.`;
+function createStore({ storage = null, fetcher = null, onStatus = () => {} } = {}) {
+  let workspace = seedWorkspace(), serverVersion = null, timer = null, saving = false, queued = false, hadLocal = false, dirty = false;
+  try { const stored = storage?.getItem(STORAGE_KEY); if (stored) { const parsed = JSON.parse(stored); if (!validateWorkspace(parsed).length) { workspace = parsed; hadLocal = true; } } } catch { onStatus('Local data could not be read. The sample workspace is open.', 'warning'); }
+  const listeners = [];
+  function publish() { for (const fn of listeners) fn(workspace); }
+  function localSave() {
+    try { storage?.setItem(STORAGE_KEY, JSON.stringify(workspace)); } catch { onStatus('Browser storage is full. Export your work or use the local server.', 'error'); }
   }
-
-  if (containsAny(q, ["mix", "combination", "amr", "forklift", "arm", "vision", "humanoid"])) {
-    return `The platform intentionally evaluates a **combination** of technologies. For this process, the recommended mix is: ${model.automationMix.map(item => `**${item.label} ${item.share}%** using ${item.robot.name}`).join(", ")}. This prevents the common mistake of forcing every process into a humanoid use case.`;
-  }
-
-  if (containsAny(q, ["capex", "light", "raas", "lease", "commercial"])) {
-    return `To keep this CapEx-light, use **RaaS or operating lease** as the default. In the current scenario, startup integration is **${formatCurrency(model.startupCapex)}** and run-rate program cost is **${formatCurrency(model.annualProgramCost)} per year**. DP World should avoid buying a large fleet upfront; require uptime SLAs, service credits, remote monitoring, spare-part commitments, and a clean exit clause after the pilot.`;
-  }
-
-  if (containsAny(q, ["roi", "payback", "cost", "savings", "financial", "business case"])) {
-    const payback = Number.isFinite(model.paybackYears) ? `${model.paybackYears.toFixed(1)} years` : "not recovered";
-    return `The model estimates **${formatCurrency(model.annualLaborAvoided)}** annual gross labor value, **${formatCurrency(model.annualProgramCost)}** annual robot/platform cost, and **${formatCurrency(model.netAnnualSavings)}** net annual savings. ROI is **${percent(model.roi)}** with payback of **${payback}**. The economics improve most when volume density, utilization, wage cost, uptime, and process standardization are high.`;
-  }
-
-  if (containsAny(q, ["manual", "compare", "human", "humanoid", "performance", "throughput", "hybrid"])) {
-    return `Manual execution needs about **${model.manualFte.toFixed(1)} FTE per shift** in this configuration. The hybrid-assisted design needs about **${model.assistedFte.toFixed(1)} residual human FTE** plus **${model.robotsRequired} primary automation units**, offsetting **${model.fteOffset.toFixed(1)} FTE**. The simulated cycle time changes from **${model.manualCycleSec.toFixed(1)} sec** manual to **${model.robotCycleSec.toFixed(1)} sec** assisted, with an estimated throughput change of **${percent(model.throughputGain)}**.`;
-  }
-
-  if (containsAny(q, ["safety", "risk", "guardrail", "compliance"])) {
-    const bullets = guardrails.map(item => `**${item.title}:** ${item.text}`).join(" ");
-    return `Main guardrails for this scenario: ${bullets} In production, DP World should require site-level risk assessment, safety-rated zones, emergency-stop coverage, ISO/ANSI/OSHA/local compliance review, cybersecurity review, and human-in-the-loop exception procedures.`;
-  }
-
-  if (containsAny(q, ["upload", "engineering", "model", "material flow", "process flow", "custom"])) {
-    return `Use the Process Configurator to create a custom process and upload engineering files, process flows, layout drawings, material-flow CSVs, or JSON step lists. This offline demo records the file names and can read simple text/JSON step lists. A production version would parse CAD/BIM/material-flow data into the digital twin and calculate travel distances, bottlenecks, and automation constraints automatically.`;
-  }
-
-  if (containsAny(q, ["pilot", "where", "site", "location", "processes", "roadmap"])) {
-    return `Best pilot candidates are high-cost, high-volume, repeatable 3PL processes with labor shortage or overtime pressure. Strong candidates include inventory scan, packing QC, case picking, AMR replenishment, and robotic forklift pallet movement. For container unloading, palletizing, and sorter induction, specialist robotics should be evaluated first. Start with one site, one process, one integration path, and a 60 to 90 day KPI gate.`;
-  }
-
-  if (containsAny(q, ["data", "collect", "before", "requirements", "inputs"])) {
-    return `Before deployment, collect: actual cycle time by task, hourly labor cost, overtime and agency labor, absenteeism, SKU dimensions and weight distribution, travel distance, exception reasons, WMS transaction logs, safety incidents, dock/aisle dimensions, Wi-Fi/5G coverage, charging locations, and current supervisor span of control. The quality of this data determines whether the simulation becomes a credible business case.`;
-  }
-
-  if (containsAny(q, ["aws", "cloud", "architecture", "integration", "platform"])) {
-    return `AWS should be positioned as the cloud, data, digital twin, edge, AI, security, and integration foundation. DP World should own the logistics intelligence layer: process models, capability library, vendor scoring, safety rules, ROI logic, and hybrid workforce orchestration. OEMs should expose APIs for task assignment, telemetry, health, maintenance, safety events, and software versioning.`;
-  }
-
-  return `For the current **${model.process.name}** scenario, I would frame the executive message as: use a simulation-first, vendor-neutral **Hybrid Workforce Platform**, deploy through CapEx-light commercial models, prove value with a limited pilot, and scale only when cycle time, safety, uptime, integration, and ROI pass the gate. Current decision signal: **${model.decision.title}**.`;
-}
-
-function containsAny(text, tokens) {
-  return tokens.some(token => text.includes(token));
-}
-
-/* ===== src-modules/app.js ===== */
-
-const state = hydrateInitialState();
-let model = modelScenario(state);
-let simulation = null;
-let telemetryTimer = null;
-
-const VIEW_TITLES = {
-  cockpit: "Executive Cockpit",
-  process: "Process Configurator",
-  simulation: "3D Simulation",
-  marketplace: "OEM Marketplace",
-  assistant: "AI Advisor",
-  architecture: "Four-Layer Architecture"
-};
-
-const CAPABILITY_LABELS = {
-  lift: "Lifting and carrying",
-  mobility: "Mobility in warehouse spaces",
-  dexterity: "Dexterous handling",
-  vision: "Vision, OCR and scanning",
-  endurance: "Shift endurance",
-  speed: "Operational speed",
-  autonomy: "Autonomy level",
-  safety: "Human collaboration safety",
-  api: "Integration/API readiness",
-  scalability: "Scalability"
-};
-
-function hydrateInitialState() {
-  const base = structuredClone(DEFAULT_STATE);
-  const process = PROCESSES.find(item => item.id === base.processId) || PROCESSES[0];
-  base.params = { ...process.defaultParams };
-  try {
-    const saved = localStorage.getItem("dpworld-hybrid-workforce-state");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      const normalized = normalizeImportedState(parsed);
-      const selectedProcess = normalized.processId === "custom-process"
-        ? getProcess({ ...base, ...normalized })
-        : PROCESSES.find(item => item.id === normalized.processId) || process;
-      return { ...base, ...normalized, params: { ...selectedProcess.defaultParams, ...(normalized.params || {}) } };
-    }
-  } catch (error) {
-    console.warn("Could not load saved state", error);
-  }
-  return base;
-}
-
-function persistState() {
-  try {
-    localStorage.setItem("dpworld-hybrid-workforce-state", JSON.stringify({ state }));
-  } catch (error) {
-    console.warn("Local storage unavailable", error);
-  }
-}
-
-function setState(patch) {
-  Object.assign(state, patch);
-  if (patch.processId) {
-    const process = getProcess(state);
-    state.params = { ...process.defaultParams, ...(patch.params || {}) };
-    state.selectedRobotId = null;
-  }
-  model = modelScenario(state);
-  persistState();
-  renderAll();
-}
-
-function init() {
-  bindNavigation();
-  bindHeroJumps();
-  bindScenarioActions();
-  bindProcessControls();
-  bindMarketplaceControls();
-  bindAssistant();
-  bindSimulation();
-  renderAll();
-  addChatMessage("assistant", "I am the DP World Hybrid Workforce Advisor. Configure a process, upload a process/material-flow file, or ask about ROI, CapEx-light deployment, AMRs, robotic forklifts, robotic arms, vision systems, humanoids, safety, pilots, or AWS architecture.");
-}
-
-function bindNavigation() {
-  document.querySelectorAll(".nav-item").forEach(button => {
-    button.addEventListener("click", () => showView(button.dataset.view));
-  });
-}
-
-function bindHeroJumps() {
-  document.querySelectorAll("[data-jump]").forEach(button => {
-    button.addEventListener("click", () => showView(button.dataset.jump));
-  });
-}
-
-function showView(viewId) {
-  document.querySelectorAll(".view").forEach(view => view.classList.remove("active-view"));
-  document.querySelectorAll(".nav-item").forEach(item => item.classList.toggle("active", item.dataset.view === viewId));
-  const view = document.getElementById(viewId);
-  if (view) view.classList.add("active-view");
-  document.getElementById("pageTitle").textContent = VIEW_TITLES[viewId] || "Hybrid Workforce Platform";
-  if (viewId === "simulation" && simulation) setTimeout(() => simulation.resize(), 50);
-}
-
-function bindScenarioActions() {
-  document.getElementById("resetScenario").addEventListener("click", () => {
-    const process = PROCESSES.find(item => item.id === DEFAULT_STATE.processId) || PROCESSES[0];
-    Object.assign(state, structuredClone(DEFAULT_STATE), { params: { ...process.defaultParams } });
-    model = modelScenario(state);
-    persistState();
-    renderAll();
-    toast("Baseline scenario restored.");
-  });
-
-  document.getElementById("exportScenario").addEventListener("click", () => {
-    const blob = new Blob([exportState(state)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `dpworld-hybrid-workforce-scenario-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    toast("Scenario exported as JSON.");
-  });
-
-  document.getElementById("importScenario").addEventListener("change", async event => {
-    const file = event.target.files[0];
-    if (!file) return;
+  async function serverSave() {
+    if (!fetcher || serverVersion === null) return;
+    if (saving) { queued = true; return; }
+    saving = true;
+    const snapshot = copy(workspace);
     try {
-      const text = await file.text();
-      const imported = normalizeImportedState(JSON.parse(text));
-      Object.assign(state, imported);
-      const process = getProcess(state);
-      state.params = { ...process.defaultParams, ...(imported.params || {}) };
-      model = modelScenario(state);
-      persistState();
-      renderAll();
-      toast("Scenario imported.");
-    } catch (error) {
-      toast(`Import failed: ${error.message}`);
-    } finally {
-      event.target.value = "";
-    }
-  });
-}
-
-function bindProcessControls() {
-  const processSelect = document.getElementById("processSelect");
-  processSelect.innerHTML = [
-    ...PROCESSES.map(process => `<option value="${process.id}">${process.name}</option>`),
-    `<option value="custom-process">+ Create custom process flow</option>`
-  ].join("");
-  processSelect.addEventListener("change", event => setState({ processId: event.target.value }));
-
-  const regionSelect = document.getElementById("regionSelect");
-  regionSelect.innerHTML = REGIONS.map(region => `<option value="${region.id}">${region.name}</option>`).join("");
-  regionSelect.addEventListener("change", event => setState({ regionId: event.target.value }));
-
-  const commercialModel = document.getElementById("commercialModel");
-  commercialModel.addEventListener("change", event => setState({ commercialModel: event.target.value }));
-
-  bindCustomProcessControls();
-  bindUploadControls();
-  renderParameterSliders();
-}
-
-function bindCustomProcessControls() {
-  const name = document.getElementById("customProcessName");
-  const category = document.getElementById("customProcessCategory");
-  const summary = document.getElementById("customProcessSummary");
-  const steps = document.getElementById("customProcessSteps");
-  const apply = document.getElementById("applyCustomProcess");
-  const fields = [name, category, summary, steps].filter(Boolean);
-
-  apply?.addEventListener("click", () => {
-    const customProcess = readCustomProcessFields();
-    state.customProcess = customProcess;
-    state.processId = "custom-process";
-    const process = getProcess(state);
-    state.params = { ...process.defaultParams, ...state.params };
-    model = modelScenario(state);
-    persistState();
-    renderAll();
-    toast("Custom process flow applied.");
-  });
-
-  fields.forEach(field => field.addEventListener("change", () => {
-    if (state.processId !== "custom-process") return;
-    state.customProcess = readCustomProcessFields();
-    model = modelScenario(state);
-    persistState();
-    renderAll({ skipSliders: true });
-  }));
-}
-
-function readCustomProcessFields() {
-  const stepsText = document.getElementById("customProcessSteps")?.value || "";
-  const steps = stepsText.split(/\n+/).map(item => item.trim()).filter(Boolean);
+      const response = await fetcher('/api/workspace', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ workspace: snapshot, version: serverVersion }) });
+      if (response.status === 409) { serverVersion = null; onStatus('The server has a newer version. Local work is preserved. Export it before you reload.', 'error'); }
+      else if (!response.ok) throw new Error('Save failed');
+      else { const result = await response.json(); serverVersion = result.version; onStatus('Saved to browser and local database', 'saved'); }
+    } catch { onStatus('The server is not available. Work is saved in this browser. Export a copy.', 'warning'); }
+    finally { saving = false; if (queued) { queued = false; await serverSave(); } }
+  }
+  function save() { dirty = true; workspace.savedAt = new Date().toISOString(); localSave(); clearTimeout(timer); timer = setTimeout(serverSave, 450); publish(); }
   return {
-    ...(state.customProcess || {}),
-    name: document.getElementById("customProcessName")?.value?.trim() || "Custom process flow",
-    category: document.getElementById("customProcessCategory")?.value?.trim() || "Custom",
-    summary: document.getElementById("customProcessSummary")?.value?.trim() || "User-defined process flow.",
-    steps: steps.length ? steps : ["Receive task", "Execute activity", "Validate output", "Close transaction"]
+    get: () => workspace,
+    subscribe: fn => listeners.push(fn),
+    current: () => workspace.cases.find(c => c.id === workspace.activeCaseId) || workspace.cases[0],
+    setActive(id) { if (workspace.cases.some(c => c.id === id)) { workspace.activeCaseId = id; save(); } },
+    updateCase(id, update, material = true) {
+      const c = workspace.cases.find(c => c.id === id); if (!c) return;
+      update(c); c.updatedAt = new Date().toISOString();
+      if (material) { c.revision++; if (c.deployment.review) c.deployment.review = null; }
+      save();
+    },
+    updateConfig(id, update) {
+      const v = workspace.configs.find(v => v.id === id); if (!v) return;
+      update(v); v.revision++;
+      for (const c of workspace.cases) { c.revision++; c.updatedAt = new Date().toISOString(); c.deployment.review = null; }
+      save();
+    },
+    addCase(c) { workspace.cases.push(c); workspace.activeCaseId = c.id; save(); },
+    replace(next) { const errors = validateWorkspace(next); if (errors.length) throw new Error(errors[0]); workspace = copy(next); if (!workspace.cases.some(c => c.id === workspace.activeCaseId)) workspace.activeCaseId = workspace.cases[0].id; save(); },
+    save,
+    flush: serverSave,
+    async connect() {
+      if (!fetcher) { onStatus('Browser storage · offline mode', 'local'); return; }
+      try {
+        const response = await fetcher('/api/workspace'); if (!response.ok) throw new Error('No service');
+        const remote = await response.json(); serverVersion = remote.version;
+        if (remote.workspace) {
+          if (validateWorkspace(remote.workspace).length) throw new Error('Invalid server data');
+          if ((!hadLocal && !dirty) || remote.workspace.savedAt >= workspace.savedAt) { workspace = remote.workspace; localSave(); publish(); }
+          else await serverSave();
+        } else { localSave(); await serverSave(); }
+        onStatus('Saved to browser and local database', 'saved');
+      } catch { serverVersion = null; onStatus('Browser storage · offline mode', 'local'); }
+    }
   };
 }
 
-function bindUploadControls() {
-  const input = document.getElementById("engineeringUploads");
-  input?.addEventListener("change", async event => {
-    const files = Array.from(event.target.files || []);
-    if (!files.length) return;
-    const assets = [];
-    for (const file of files) {
-      const asset = {
-        name: file.name,
-        type: file.type || inferFileType(file.name),
-        sizeKb: Math.round(file.size / 1024),
-        uploadedAt: new Date().toISOString()
-      };
-      assets.push(asset);
-      await tryApplyProcessFile(file);
-    }
-    state.uploadedAssets = [...(state.uploadedAssets || []), ...assets].slice(-12);
-    persistState();
-    renderAll();
-    toast(`${files.length} file(s) attached to scenario.`);
-    event.target.value = "";
-  });
-}
 
-async function tryApplyProcessFile(file) {
-  const lower = file.name.toLowerCase();
-  if (!lower.endsWith(".json") && !lower.endsWith(".txt") && !lower.endsWith(".csv")) return;
-  try {
-    const text = await file.text();
-    let steps = [];
-    let name = state.customProcess?.name || "Custom process flow";
-    let summary = state.customProcess?.summary || "Imported from uploaded process/material-flow file.";
-    if (lower.endsWith(".json")) {
-      const json = JSON.parse(text);
-      if (json.name) name = json.name;
-      if (json.summary) summary = json.summary;
-      if (Array.isArray(json.steps)) steps = json.steps.map(item => typeof item === "string" ? item : item.name || item.detail || "Imported step");
-    } else {
-      steps = text.split(/\n+/).map(line => line.split(",")[0].trim()).filter(Boolean).slice(0, 10);
-    }
-    if (steps.length) {
-      state.customProcess = { ...(state.customProcess || {}), name, summary, steps };
-      state.processId = "custom-process";
-    }
-  } catch (error) {
-    console.warn("Could not parse uploaded process file", error);
+/* imports.js */
+
+function parseTaskTimes(text) {
+  const times = {};
+  for (const line of text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean)) {
+    const index = line.lastIndexOf(':');
+    const skill = line.slice(0,index).trim().toLowerCase().replace(/\s+/g,'-');
+    const seconds = Number(line.slice(index+1).trim());
+    if (index < 1 || !skill || ['__proto__','constructor','prototype'].includes(skill) || skill.length > 80 || !Number.isFinite(seconds) || seconds <= 0 || Object.hasOwn(times,skill)) throw new Error('Use one unique skill: seconds pair per line, with a positive time.');
+    times[skill] = seconds;
   }
+  return times;
 }
 
-function inferFileType(name) {
-  const extension = name.split(".").pop()?.toUpperCase() || "FILE";
-  if (["IFC", "DWG", "DXF", "STEP", "STP", "GLB", "GLTF"].includes(extension)) return "Engineering model";
-  if (["CSV", "XLS", "XLSX"].includes(extension)) return "Material flow data";
-  if (["PDF", "PNG", "JPG", "JPEG", "SVG"].includes(extension)) return "Process / layout document";
-  return extension;
-}
-
-function renderParameterSliders() {
-  const container = document.getElementById("parameterSliders");
-  const definitions = parameterDefinitionsForProcess(state.processId);
-  container.innerHTML = definitions.map(def => {
-    const value = state.params[def.key] ?? getParams(state)[def.key] ?? def.min;
-    return `
-      <div class="slider-row" data-param="${def.key}">
-        <header>
-          <label for="param-${def.key}">${def.label}</label>
-          <span class="slider-value" id="value-${def.key}">${formatSliderValue(def, value)}</span>
-        </header>
-        <div class="slider-meta">${escapeHtml(def.group || "Parameter")}</div>
-        <input id="param-${def.key}" type="range" min="${def.min}" max="${def.max}" step="${def.step}" value="${value}" />
-      </div>
-    `;
-  }).join("");
-
-  definitions.forEach(def => {
-    const input = document.getElementById(`param-${def.key}`);
-    input.addEventListener("input", event => {
-      const value = Number(event.target.value);
-      state.params[def.key] = value;
-      const valueEl = document.getElementById(`value-${def.key}`);
-      if (valueEl) valueEl.textContent = formatSliderValue(def, value);
-      model = modelScenario(state);
-      persistState();
-      renderAll({ skipSliders: true });
-    });
-  });
-}
-
-function formatSliderValue(def, value) {
-  const prefix = def.prefix || "";
-  const suffix = def.suffix || "";
-  const decimals = Number.isInteger(value) ? 0 : 1;
-  return `${prefix}${formatNumber(value, decimals)}${suffix}`;
-}
-
-function bindMarketplaceControls() {
-  document.getElementById("oemSearch").addEventListener("input", () => renderMarketplace());
-  document.getElementById("oemFilter").addEventListener("change", () => renderMarketplace());
-}
-
-function bindAssistant() {
-  const form = document.getElementById("chatForm");
-  const input = document.getElementById("chatInput");
-  form.addEventListener("submit", event => {
-    event.preventDefault();
-    const question = input.value.trim();
-    if (!question) return;
-    addChatMessage("user", escapeHtml(question));
-    input.value = "";
-    setTimeout(() => addChatMessage("assistant", markdownLite(answerQuestion(question, model))), 120);
-  });
-
-  document.querySelectorAll(".prompt-chip").forEach(button => {
-    button.addEventListener("click", () => {
-      input.value = button.textContent.trim();
-      form.requestSubmit();
-    });
-  });
-}
-
-function addChatMessage(role, html) {
-  const messages = document.getElementById("chatMessages");
-  const div = document.createElement("div");
-  div.className = `message ${role}`;
-  div.innerHTML = html;
-  messages.appendChild(div);
-  messages.scrollTop = messages.scrollHeight;
-}
-
-function markdownLite(text) {
-  return escapeHtml(text).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-}
-
-function bindSimulation() {
-  const canvas = document.getElementById("warehouseCanvas");
-  simulation = new WarehouseSimulation(canvas);
-  simulation.setModel(model);
-
-  document.getElementById("simPlay").addEventListener("click", () => {
-    simulation.play();
-    document.getElementById("simStateTag").textContent = "Running";
-  });
-  document.getElementById("simPause").addEventListener("click", () => {
-    simulation.pause();
-    document.getElementById("simStateTag").textContent = "Paused";
-  });
-  document.getElementById("simReset").addEventListener("click", () => {
-    simulation.reset();
-    document.getElementById("simStateTag").textContent = "Ready";
-    renderTimeline();
-  });
-  document.getElementById("simSpeed").addEventListener("input", event => simulation.setSpeed(event.target.value));
-
-  telemetryTimer = setInterval(() => {
-    renderTelemetry();
-    renderTimeline();
-  }, 350);
-}
-
-function renderAll(options = {}) {
-  model = modelScenario(state);
-  renderControls(options);
-  renderCockpit();
-  renderProcessSummary();
-  renderCapabilities();
-  renderRecommendationGrid();
-  renderAutomationMix();
-  renderMarketplace();
-  renderGuardrails();
-  renderTelemetry();
-  renderTimeline();
-  if (simulation) simulation.setModel(model);
-}
-
-function renderControls(options = {}) {
-  document.getElementById("processSelect").value = state.processId;
-  document.getElementById("regionSelect").value = state.regionId;
-  document.getElementById("commercialModel").value = state.commercialModel;
-  renderCustomProcessControls();
-  renderUploadedAssets();
-  if (!options.skipSliders) renderParameterSliders();
-}
-
-function renderCustomProcessControls() {
-  const builder = document.getElementById("customProcessBuilder");
-  const isCustom = state.processId === "custom-process";
-  if (builder) builder.classList.toggle("visible", isCustom);
-  const custom = state.customProcess || DEFAULT_STATE.customProcess;
-  const name = document.getElementById("customProcessName");
-  const category = document.getElementById("customProcessCategory");
-  const summary = document.getElementById("customProcessSummary");
-  const steps = document.getElementById("customProcessSteps");
-  if (name) name.value = custom.name || "";
-  if (category) category.value = custom.category || "";
-  if (summary) summary.value = custom.summary || "";
-  if (steps) steps.value = (custom.steps || []).map(item => typeof item === "string" ? item : item.name || item.detail || "").join("\n");
-}
-
-function renderUploadedAssets() {
-  const container = document.getElementById("uploadedAssetList");
-  if (!container) return;
-  const assets = state.uploadedAssets || [];
-  if (!assets.length) {
-    container.innerHTML = `<p class="muted small">No engineering, process-flow, or material-flow files attached yet.</p>`;
-    return;
+function parseCsv(text) {
+  const rows = []; let row = [], value = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"') { if (quoted && text[i+1] === '"') { value += '"'; i++; } else quoted = !quoted; }
+    else if (char === ',' && !quoted) { row.push(value.trim()); value = ''; }
+    else if ((char === '\n' || char === '\r') && !quoted) { if (char === '\r' && text[i+1] === '\n') i++; row.push(value.trim()); if (row.some(Boolean)) rows.push(row); row = []; value = ''; }
+    else value += char;
   }
-  container.innerHTML = assets.map(asset => `
-    <div class="asset-pill">
-      <span>${escapeHtml(asset.name)}</span>
-      <strong>${escapeHtml(asset.type || "File")} - ${formatNumber(asset.sizeKb)} KB</strong>
-    </div>
-  `).join("");
+  if (quoted) throw new Error('The CSV has an unclosed quoted field.');
+  row.push(value.trim()); if (row.some(Boolean)) rows.push(row);
+  return rows;
 }
 
-function renderCockpit() {
-  const decision = model.decision;
-  document.getElementById("recommendationTitle").textContent = decision.title;
-  document.getElementById("recommendationText").textContent = decision.text;
-  document.getElementById("confidenceValue").textContent = percent(model.confidence);
-  document.getElementById("confidenceBar").style.width = `${model.confidence}%`;
-
-  const primaryMix = model.automationMix.slice(0, 3).map(item => item.label.split(" /")[0]).join(" + ");
-  const kpis = [
-    { label: "Recommended solution", value: primaryMix, trend: `${model.selected.score.toFixed(0)}/100 primary match` },
-    { label: "Primary units", value: formatNumber(model.robotsRequired), trend: "Automation fleet required" },
-    { label: "FTE offset per shift", value: model.fteOffset.toFixed(1), trend: `${model.manualFte.toFixed(1)} manual FTE base` },
-    { label: "Net annual savings", value: formatCurrency(model.netAnnualSavings), trend: `${percent(model.roi)} ROI` },
-    { label: "Payback", value: Number.isFinite(model.paybackYears) ? `${model.paybackYears.toFixed(1)} yrs` : "No payback", trend: formatCurrency(model.startupCapex) + " startup" },
-    { label: "Service level", value: percent(model.projectedServiceLevel, 1), trend: `${percent(model.errorReduction)} error reduction` }
-  ];
-
-  document.getElementById("kpiGrid").innerHTML = kpis.map(item => `
-    <article class="kpi-card">
-      <p class="eyebrow">${escapeHtml(item.label)}</p>
-      <strong>${escapeHtml(item.value)}</strong>
-      <span class="kpi-trend">${escapeHtml(item.trend)}</span>
-    </article>
-  `).join("");
-
-  drawPerformanceChart();
-  drawCostChart();
+function parseActions(text, format = 'txt') {
+  if (text.length > 2_000_000) throw new Error('Use an action list smaller than 2 MB.');
+  let source;
+  if (format === 'json') { const parsed = JSON.parse(text); source = Array.isArray(parsed) ? parsed : parsed.actions; }
+  else if (format === 'csv') {
+    const [headers, ...rows] = parseCsv(text.replace(/^\uFEFF/, ''));
+    if (!headers?.includes('name')) throw new Error('The CSV needs a name column. Optional columns: skill, seconds, frequency, payloadKg, reachM, aisleM, note.');
+    source = rows.map(row => Object.fromEntries(headers.map((header,index)=>[header,row[index]??''])));
+  } else source = text.split(/\r?\n/).map(line=>line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim()).filter(Boolean).map(name=>({name}));
+  if (!Array.isArray(source) || !source.length || source.length > 500) throw new Error('Use a list with 1–500 actions.');
+  const numeric = (value, fallback = null) => { if (value === '' || value == null) return fallback; const n=Number(value); if (!Number.isFinite(n)||n<0) throw new Error('Action numbers must be non-negative.'); return n; };
+  return source.map((a,index)=>{
+    if (!a || typeof a.name !== 'string' || !a.name.trim()) throw new Error(`Action ${index+1} needs a name.`);
+    return { id: uid('action'), name: a.name.trim(), skill: a.skill || '', seconds: numeric(a.seconds), frequency: numeric(a.frequency,1), payloadKg: numeric(a.payloadKg), reachM: numeric(a.reachM), aisleM: numeric(a.aisleM), source: 'Assumed', sourceId: '', note: a.note || 'Imported draft. Review skill, timing, requirements, and sequence.', recovery: a.recovery || 'Not defined', dependency: '', parallel: false };
+  }).map((a,index,arr)=>({...a,dependency:index?arr[index-1].id:''}));
 }
 
-function renderProcessSummary() {
-  const process = model.process;
-  const techTags = (process.recommendedTech || []).map(tech => `<span>${escapeHtml(TECHNOLOGY_LABELS[tech] || tech)}</span>`).join("");
-  const assets = (state.uploadedAssets || []).length ? `<p style="margin-top:10px"><strong>Attached files:</strong> ${(state.uploadedAssets || []).length} file(s) linked to this scenario.</p>` : "";
-  document.getElementById("processSummary").innerHTML = `
-    <h4>${escapeHtml(process.name)}</h4>
-    <p>${escapeHtml(process.summary)}</p>
-    <p style="margin-top:10px"><strong>Category:</strong> ${escapeHtml(process.category)} | <strong>Pilot fit:</strong> ${escapeHtml(process.pilotFit)}</p>
-    <div class="tech-tags">${techTags}</div>
-    ${assets}
-  `;
+
+/* views.js */
+
+
+const htmlEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+const euro = value => value == null || !Number.isFinite(value) ? 'Not known' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(value);
+const unitEuro = value => value == null || !Number.isFinite(value) ? 'Not known' : new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+const number = (value, digits = 1) => value == null || !Number.isFinite(value) ? '—' : new Intl.NumberFormat('en-GB', { maximumFractionDigits: digits }).format(value);
+const h = htmlEscape;
+const paths = {
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  layers: '<path d="m12 3 10 6-10 6L2 9l10-6Zm-9 12 9 6 9-6M3 12l9 6 9-6"/>',
+  robot: '<rect x="5" y="6" width="14" height="13" rx="3"/><path d="M12 3v3M2 11v4m20-4v4M8 19v3m8-3v3M8 11h1m6 0h1m-7 4h6"/>',
+  book: '<path d="M12 5c-3-2-6-2-10-1v15c4-1 7-1 10 1 3-2 6-2 10-1V4c-4-1-7-1-10 1v15"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6v6h6M8 12h8m-8 4h5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>',
+  down: '<path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>',
+  check: '<path d="m5 12 4 4L19 6"/>',
+  search: '<circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/>',
+  activity: '<path d="M2 12h4l3-8 6 16 3-8h4"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z"/>',
+  brief: '<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V3h8v4M3 12h18m-9-2v4"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  close: '<path d="m6 6 12 12M6 18 18 6"/>',
+  person: '<circle cx="12" cy="7" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3"/>',
+  link: '<path d="m10 13 4-4m-7 7-1 1a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m2 2 1-1a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0"/>'
+};
+const icon = name => `<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.file}</svg>`;
+const chip = (text, type = '') => `<span class="chip ${type}">${h(text)}</span>`;
+const button = (text, action, { id = '', kind = 'secondary', extra = '', iconName = '' } = {}) => `<button class="button ${kind}" data-action="${h(action)}" ${id ? `data-id="${h(id)}"` : ''} ${extra}>${iconName ? icon(iconName) : ''}${h(text)}</button>`;
+const empty = (title, detail, action = '') => `<div class="empty"><div class="empty-icon">${icon('layers')}</div><h3>${h(title)}</h3><p>${h(detail)}</p>${action}</div>`;
+const titleRow = (title, detail = '', action = '') => `<div class="section-title"><div><h2>${h(title)}</h2>${detail ? `<p>${h(detail)}</p>` : ''}</div>${action}</div>`;
+const panel = (title, detail, body, action = '', className = '') => `<section class="panel ${className}">${titleRow(title, detail, action)}${body}</section>`;
+const metric = (label, value, detail = '', tone = '', glyph = 'activity') => `<div class="metric ${tone}"><div class="metric-label">${h(label)}${icon(glyph)}</div><div class="metric-value">${h(value)}</div><div class="metric-detail">${h(detail)}</div></div>`;
+const safeOptions = (values, current) => values.map(value => { const [id,label] = Array.isArray(value) ? value : [value,value]; return `<option value="${h(id)}" ${String(id) === String(current) ? 'selected' : ''}>${h(label)}</option>`; }).join('');
+function inputField(path, label, value, { unit = '', help = '', type = 'number', step = 'any', min = 0, max = '', prefix = 'field', required = false } = {}) {
+  const id = `${prefix}-${path.replace(/[^a-zA-Z0-9]/g, '-')}`;
+  return `<div class="field"><label for="${id}">${h(label)}${unit ? `<span>${h(unit)}</span>` : ''}</label><input id="${id}" ${prefix === 'field' ? `data-field="${h(path)}"` : `name="${h(path)}"`} type="${type}" value="${h(value)}" ${type === 'number' ? `step="${step}" min="${min}" ${max !== '' ? `max="${max}"` : ''}` : ''} ${required ? 'required' : ''} placeholder="${type === 'number' ? 'Not known' : ''}" ${help ? `aria-describedby="${id}-help"` : ''}>${help ? `<small id="${id}-help">${h(help)}</small>` : ''}</div>`;
+}
+function selectField(path, label, value, options, { help = '', prefix = 'field' } = {}) {
+  const id = `${prefix}-${path.replace(/[^a-zA-Z0-9]/g, '-')}`;
+  return `<div class="field"><label for="${id}">${h(label)}</label><select id="${id}" ${prefix === 'field' ? `data-field="${h(path)}"` : `name="${h(path)}"`}>${safeOptions(options, value)}</select>${help ? `<small>${h(help)}</small>` : ''}</div>`;
+}
+const noteField = (path, label, value, help = '') => `<div class="field wide"><label for="note-${h(path)}">${h(label)}</label><textarea id="note-${h(path)}" data-field="${h(path)}" rows="3">${h(value)}</textarea>${help ? `<small>${h(help)}</small>` : ''}</div>`;
+const gridFields = items => `<div class="fields">${items.join('')}</div>`;
+const table = (headers, rows, className = '') => `<div class="table-scroll"><table class="${className}"><thead><tr>${headers.map(x => `<th>${h(x)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+const row = cells => `<tr>${cells.map(x => `<td>${x}</td>`).join('')}</tr>`;
+const progress = (value, tone = '') => `<span class="bar ${tone}"><i style="width:${Math.max(0, Math.min(100, value || 0))}%"></i></span>`;
+const resultStatus = r => chip(({ candidate: 'Candidate for study', 'not-feasible': 'Constraint not met', 'needs-data': 'Needs data', 'no-business-case': 'No business case', baseline: 'Current method', 'no-demand': 'No demand' })[r.status] || r.status, r.status === 'candidate' ? 'green' : r.status === 'baseline' ? '' : 'amber');
+const viewLink = (c, tab = '', label = 'Open case') => button(label, 'open-case', { id: c.id, kind: 'text', extra: tab ? `data-tab="${tab}"` : '', iconName: 'arrow' });
+const selected = ctx => ctx.c.scenarios.find(s => s.id === ctx.c.selectedScenarioId) || ctx.c.scenarios[0];
+const selectedResult = ctx => evaluateScenario(ctx.c, selected(ctx), ctx.w.configs);
+const scenarioPicker = ctx => `<label class="inline-label">Option<select data-action="select-scenario" aria-label="Selected option">${safeOptions(ctx.c.scenarios.map(s => [s.id, s.name]), ctx.c.selectedScenarioId)}</select></label>`;
+
+function appSidebar(ctx) {
+  const links = [['executive','grid','Executive'],['evaluations','layers','Evaluations'],['deployments','robot','Deployments'],['catalog','book','Technology library'],['evidence','file','Evidence & questions']];
+  return `<aside class="sidebar ${ctx.mobileMenu ? 'is-open' : ''}" aria-label="Main navigation" ${ctx.isMobile&&!ctx.mobileMenu?'inert':''}><a class="brand" href="#executive"><span class="brand-mark">h<span>+</span></span><span>Hybrid<br><strong>Workforce</strong></span></a><div class="nav-label">WORKSPACE</div><nav>${links.map(([id,glyph,label]) => `<button data-action="navigate" data-id="${id}" class="nav-item ${ctx.view === id || ctx.view === 'case' && id === 'evaluations' ? 'active' : ''}">${icon(glyph)}<span>${label}</span>${id === 'evaluations' ? `<b>${ctx.w.cases.length}</b>` : ''}</button>`).join('')}</nav><div class="sidebar-case"><span class="nav-label">CURRENT CASE</span><strong>${h(ctx.c.name)}</strong><span>${h(ctx.c.site)}</span>${button('Continue case', 'open-case', { id: ctx.c.id, kind: 'sidebar-link', iconName: 'arrow' })}</div><div class="sidebar-footer"><span class="online-dot"></span> Local prototype <span class="version">v2</span><p>People and technology.<br>One complete process.</p><a href="docs/v2-design/design-review.html" target="_blank" rel="noopener">Design basis ${icon('link')}</a></div></aside>`;
 }
 
-function renderCapabilities() {
-  const req = processAdjustedRequirements(model.process, model.params);
-  const entries = Object.entries(req);
-  document.getElementById("capabilityRadar").innerHTML = entries.map(([key, value]) => `
-    <article class="cap-card">
-      <header>
-        <h4>${escapeHtml(CAPABILITY_LABELS[key] || key)}</h4>
-        <strong>${value.toFixed(0)}</strong>
-      </header>
-      <div class="cap-bar"><span style="width:${value}%"></span></div>
-    </article>
-  `).join("");
-
-  const notes = [
-    `Capability demand: ${req.lift.toFixed(0)}/100 lifting, ${req.dexterity.toFixed(0)}/100 dexterity, ${req.vision.toFixed(0)}/100 vision, and ${req.api.toFixed(0)}/100 API readiness based on this process configuration.`,
-    `Primary selected option: ${model.robot.name}, with ${model.robot.payloadKg} kg indicative payload capacity and ${model.robot.enduranceHours} hour indicative endurance.`,
-    model.process.pilotFit.includes("Specialist") ? "Guardrail: specialist robotics should lead the core flow; humanoids should be evaluated for exceptions, flexible support, or edge cases." : "Pilot thesis: this process has enough repeatability to test hybrid workforce automation without over-customizing the site."
-  ];
-  document.getElementById("decisionNotes").innerHTML = notes.map((note, idx) => `
-    <div class="note"><span class="note-icon">${idx + 1}</span><span>${escapeHtml(note)}</span></div>
-  `).join("");
+function renderApp(ctx) {
+  const title = { executive:'Executive', evaluations:'Evaluations', deployments:'Deployments', catalog:'Technology library', evidence:'Evidence & questions', case:'Evaluation workspace' }[ctx.view] || 'Executive';
+  return `${appSidebar(ctx)}${ctx.mobileMenu?'<button class="nav-scrim" data-action="toggle-menu" aria-label="Close navigation"></button>':''}<div class="app-main"><header class="topbar"><div class="topbar-left"><button class="icon-button mobile-toggle" data-action="toggle-menu" aria-label="Toggle navigation">${icon('menu')}</button><span class="crumb">Hybrid Workforce <span>/</span> <strong>${title}</strong></span></div><div class="topbar-right"><span class="save-status" id="save-status">${h(ctx.saveStatus)}</span><label class="sr-only" for="role-view">View role</label><select id="role-view" data-action="role-view" class="role-select">${safeOptions(['Engineer view','Executive view','Site view','Delivery view'],ctx.role)}</select>${button('Export', 'export-workspace', { iconName: 'down', kind:'quiet' })}</div></header><main id="main-content"><div class="prototype-line"><span class="dot amber-dot"></span><strong>Planning prototype</strong><span>Example cases use sample data. External robotics services are not connected.</span></div>${ctx.view === 'case' ? caseView(ctx) : globalView(ctx)}</main><footer class="app-footer"><span>Hybrid Workforce · ${h(ctx.c.site)}</span><span>Local records · Planning model 2.0 · No live robot control</span></footer></div><div id="toast" class="toast" role="status" aria-live="polite"></div><dialog id="app-dialog" aria-labelledby="dialog-title"></dialog>`;
 }
 
-function renderRecommendationGrid() {
-  const top3 = model.ranked.slice(0, 3);
-  const payback = Number.isFinite(model.paybackYears) ? `${model.paybackYears.toFixed(1)} years` : "No payback";
-  const cards = [
-    { title: "Primary automation", value: model.robot.name, text: model.selected.reason },
-    { title: "Hybrid mix", value: model.automationMix.slice(0, 3).map(item => item.label.split(" /")[0]).join(" + "), text: model.automationMix.map(item => `${item.label} ${item.share}%`).join(" | ") },
-    { title: "Fleet sizing", value: `${model.robotsRequired} units`, text: `Raw requirement is ${model.robotsRequiredRaw.toFixed(1)} primary units at ${model.params.robotUtilization}% utilization.` },
-    { title: "Commercial model", value: commercialLabel(state.commercialModel), text: `Estimated monthly primary robot cost is ${formatCurrency(model.monthlyRobotCost, false)} per unit.` },
-    { title: "Economics", value: payback, text: `Net annual savings: ${formatCurrency(model.netAnnualSavings)}. 3-year simple NPV: ${formatCurrency(model.annualNpv3Year)}.` },
-    { title: "Top alternatives", value: top3.map(item => item.robot.company.split(" ")[0]).join(" / "), text: top3.map(item => `${item.robot.name}: ${item.score.toFixed(0)}`).join(" | ") },
-    { title: "Readiness", value: percent(model.confidence), text: model.decision.text },
-    { title: "Safety impact", value: percent(model.safetyImprovement), text: "Estimated ergonomics reduction from removing repetitive or high-risk manual handling." },
-    { title: "Service level", value: percent(model.projectedServiceLevel, 1), text: "Projected SLA after quality, error, and exception handling adjustments." }
-  ];
-
-  document.getElementById("recommendationGrid").innerHTML = cards.map(card => `
-    <article class="recommendation-card">
-      <h4>${escapeHtml(card.title)}</h4>
-      <strong>${escapeHtml(card.value)}</strong>
-      <p>${escapeHtml(card.text)}</p>
-    </article>
-  `).join("");
+function globalView(ctx) {
+  if (ctx.view === 'evaluations') return evaluationsView(ctx);
+  if (ctx.view === 'deployments') return deploymentsView(ctx);
+  if (ctx.view === 'catalog') return catalogView(ctx);
+  if (ctx.view === 'evidence') return evidenceView(ctx);
+  return executiveView(ctx);
 }
 
-function renderAutomationMix() {
-  const containers = [document.getElementById("automationMix"), document.getElementById("automationMixPanel")].filter(Boolean);
-  const html = model.automationMix.map(item => `
-    <article class="mix-card">
-      <div>
-        <span class="mix-share">${item.share}%</span>
-        <h4>${escapeHtml(item.label)}</h4>
-        <p>${escapeHtml(item.robot.name)}</p>
-      </div>
-      <strong>${item.score.toFixed(0)}/100</strong>
-    </article>
-  `).join("");
-  containers.forEach(container => { container.innerHTML = html; });
+function executiveView(ctx) {
+  const records = ctx.w.cases.map(c => ({ c, rec: recommendCase(c, ctx.w.configs) }));
+  const filtered = ctx.siteFilter ? records.filter(x => x.c.site === ctx.siteFilter) : records;
+  const forecast = filtered.reduce((sum,x) => sum + Math.max(0,x.rec.best?.annualNet || 0),0);
+  const approved = filtered.filter(x => x.c.decision?.revision === x.c.revision && x.c.decision?.outcome === 'Proceed to evidence study' && x.c.decision.result?.modelVersion === MODEL_VERSION);
+  const assets = filtered.flatMap(x => x.c.deployment.assets);
+  const observed = filtered.flatMap(x => x.c.observations).filter(o => o.status === 'Measured');
+  const approvedCash = approved.reduce((sum,x)=>sum+(x.c.decision.result?.annualNet||0),0);
+  const comparable = observed.filter(o=>o.baselineCost!=null&&!observationMetrics(o).errors.length);
+  const observedDelta = comparable.length ? comparable.reduce((sum,o)=>sum+observationMetrics(o).costDelta,0) : null;
+  return `<div class="page-heading"><div><div class="eyebrow">PORTFOLIO / PEOPLE + TECHNOLOGY</div><h1>Plan the work. Check the value.</h1><p>See the opportunity, the evidence, and the path to site delivery.</p></div>${button('New evaluation','new-case',{kind:'primary',iconName:'plus'})}</div><div class="toolbar"><div class="segmented"><button class="selected" data-action="navigate" data-id="executive">Portfolio view</button><button data-action="navigate" data-id="deployments">Site delivery</button></div><label class="inline-label">Site<select data-action="site-filter" aria-label="Filter site"><option value="">All sites</option>${safeOptions([...new Set(ctx.w.cases.map(c=>c.site))],ctx.siteFilter)}</select></label></div><div class="metrics">${metric('Forecast annual cash saving',euro(forecast),'Best tested candidate per case · sample inputs','green','brief')}${metric('Initiatives in review',number(filtered.length,0),`${filtered.filter(x=>x.rec.best).length} with a modelled candidate`,'','layers')}${metric('Study decisions',number(approved.length,0),'Current recorded decisions · not pilot approval','','check')}${metric('Measured field results',number(observed.length,0),'Sample observations are excluded','','activity')}</div><div class="two-columns portfolio-grid">${panel('From idea to operation','One case links the whole journey.',`<div class="journey-strip">${[['Define','Describe the work'],['Evaluate','Compare options'],['Decide','Review the case'],['Prepare','Prepare delivery'],['Pilot','Measure a trial'],['Operate','Improve the result']].map(([stage,label],i)=>`<div><span class="journey-index">${String(i+1).padStart(2,'0')}</span><strong>${stage}</strong><small>${label}</small><b>${filtered.filter(x=>x.c.stage===stage).length}</b></div>`).join('')}</div><div class="callout subtle">${icon('file')}<div><strong>Forecast is separate from observed value.</strong><p>A positive planning result is a reason to collect evidence. It is not a proven site saving.</p></div></div>`,button('View pipeline','navigate',{id:'evaluations',kind:'text',iconName:'arrow'}))}${panel('Delivery snapshot','Planned, in pilot, and in service.',`<div class="delivery-number">${assets.length}<span>asset records</span></div><div class="mini-stats"><div><b>${assets.filter(a=>a.status==='In pilot').length}</b><span>In pilot</span></div><div><b>${assets.filter(a=>a.status==='In service').length}</b><span>In service</span></div><div><b>${assets.filter(a=>a.status==='Planned').length}</b><span>Planned</span></div></div><p class="muted">These records are local. The sample pilot does not represent a live installation.</p>`,button('Open deployments','navigate',{id:'deployments',kind:'text'}))}</div>${panel('Value basis','Forecast, approved study scope, and measured windows have different meanings.',table(['Measure','Value','Basis'],[row(['Forecast annual cash saving',euro(forecast),'Best tested candidate per case. Conditional on the entered assumptions.']),row(['Approved study forecast',euro(approvedCash),'Current decisions to study the selected option. This does not authorize a pilot or establish savings.']),row(['Measured window cost delta',euro(observedDelta),'Only measured records with an entered comparable baseline cost. This is not annualised.'])]))}${panel('Evaluation portfolio','Forecast values use the best feasible option in the tested set.',table(['Initiative / site','Stage','Best tested option','Annual net cash','Payback','Evidence',''],filtered.map(({c,rec})=>row([`<strong>${h(c.name)}</strong><small>${h(c.site)}</small>`,chip(c.stage),rec.best?h(rec.best.name):'No supported candidate',euro(rec.best?.annualNet),rec.best?.payback!=null?`${number(rec.best.payback)} years`:'—',chip(rec.best?.evidence||'Inputs needed','amber'),viewLink(c)]))))}`;
 }
 
-function renderMarketplace() {
-  const search = document.getElementById("oemSearch")?.value?.trim().toLowerCase() || "";
-  const filter = document.getElementById("oemFilter")?.value || "all";
-  const body = document.querySelector("#oemTable tbody");
-  if (!body) return;
-
-  const rows = model.ranked
-    .filter(item => filter === "all" || item.robot.technology === filter)
-    .filter(item => {
-      if (!search) return true;
-      const text = `${item.robot.name} ${item.robot.company} ${item.robot.typeLabel} ${item.robot.technology} ${item.robot.caution}`.toLowerCase();
-      return text.includes(search);
-    });
-
-  body.innerHTML = rows.map((item, idx) => {
-    const r = item.robot;
-    return `
-      <tr>
-        <td><span class="rank-pill">${idx + 1}</span></td>
-        <td><strong>${escapeHtml(r.name)}</strong><br>${escapeHtml(r.company)}</td>
-        <td><span class="tech-badge">${escapeHtml(TECHNOLOGY_LABELS[r.technology] || r.technology)}</span><br>${escapeHtml(r.typeLabel)}</td>
-        <td>${formatNumber(r.payloadKg)} kg</td>
-        <td>${r.enduranceHours} hrs</td>
-        <td>${r.speedMps} m/s</td>
-        <td>${r.deployment.map(escapeHtml).join("<br>")}</td>
-        <td><span class="match-pill">${item.score.toFixed(0)}/100</span></td>
-        <td>${r.commercialMaturity}/100</td>
-        <td>${escapeHtml(r.caution)}</td>
-      </tr>
-    `;
-  }).join("");
-
-  drawOemScoreChart();
+function evaluationsView(ctx) {
+  const cases = ctx.w.cases.filter(c => (!ctx.search || `${c.name} ${c.site} ${c.owner}`.toLowerCase().includes(ctx.search.toLowerCase())) && (!ctx.stageFilter || c.stage === ctx.stageFilter));
+  return `<div class="page-heading"><div><div class="eyebrow">EVALUATION PIPELINE</div><h1>Start with the work.</h1><p>Build the evidence before you commit to a technology.</p></div>${button('New evaluation','new-case',{kind:'primary',iconName:'plus'})}</div><div class="toolbar"><div class="search-box">${icon('search')}<input type="search" data-action="case-search" aria-label="Search evaluations" value="${h(ctx.search)}" placeholder="Find a process, site, or owner"></div><label class="inline-label">Stage<select data-action="stage-filter" aria-label="Filter stage"><option value="">All stages</option>${safeOptions(STAGES,ctx.stageFilter)}</select></label><div class="toolbar-actions">${button('Import workspace','import-workspace',{iconName:'file'})}<input type="file" id="workspace-import" accept=".json" hidden></div></div><div class="case-cards">${cases.map(c=>{const rec=recommendCase(c,ctx.w.configs), gaps=c.sources.filter(s=>['Unknown','Out of date'].includes(s.status)).length;return `<article class="case-card"><div class="card-top">${chip(c.stage,c.stage==='Pilot'?'purple':'')}${chip(c.sample?'Sample case':'User case')}</div><div class="case-symbol">${icon(c.id==='case-amr'?'robot':'layers')}</div><h2>${h(c.name)}</h2><p>${h(c.site)} · ${h(c.country)}</p><div class="case-stats"><div><span>Daily demand</span><b>${number(c.baseline.demandDaily,0)}</b></div><div><span>Forecast annual net</span><b>${euro(rec.best?.annualNet)}</b></div></div><div class="case-next"><span class="dot amber-dot"></span>${gaps?`${gaps} source gaps to resolve`:'Review the current evidence'}</div><div class="card-footer"><span class="avatar">${h(c.owner.slice(0,1))}</span><span>${h(c.owner)}</span>${viewLink(c)}</div></article>`;}).join('')||empty('No evaluations match','Change the search or add a case.')}</div>`;
 }
 
-function renderGuardrails() {
-  const guardrails = buildGuardrails(model);
-  document.getElementById("guardrails").innerHTML = guardrails.map(item => `
-    <article class="guardrail">
-      <h4>${escapeHtml(item.title)}</h4>
-      <p>${escapeHtml(item.text)}</p>
-    </article>
-  `).join("");
+function deploymentsView(ctx) {
+  const assets=ctx.w.cases.flatMap(c=>c.deployment.assets.map(a=>({...a,c}))), pilot=assets.filter(a=>a.status==='In pilot').length;
+  return `<div class="page-heading"><div><div class="eyebrow">SITE DELIVERY</div><h1>Know what runs where.</h1><p>Keep process, configuration, release, and site results connected.</p></div>${button('Plan an asset','add-asset',{kind:'primary',iconName:'plus'})}</div><div class="metrics">${metric('Asset records',number(assets.length,0),'Local register','','robot')}${metric('In pilot',number(pilot,0),'Supervised trial stage','purple','activity')}${metric('In service',number(assets.filter(a=>a.status==='In service').length,0),'Recorded status · no live feed','','check')}${metric('Sites with delivery plans',number(ctx.w.cases.filter(c=>c.deployment.siteNotes||c.deployment.assets.length).length,0),'Draft plans and sample sites','','globe')}</div>${panel('Site and asset register','The status is entered by a user. Live telemetry is not connected.',assets.length?table(['Asset / source','Site / process','Configuration','Release','Status',''],assets.map(a=>row([`<strong>${h(a.name)}</strong><small>${h(a.serial)}</small>`,`<strong>${h(a.c.site)}</strong><small>${h(a.c.name)}</small>`,h(ctx.w.configs.find(v=>v.id===a.configId)?.name||a.configId),h(a.release),chip(a.status,a.status==='In pilot'?'purple':''),button('Edit asset','edit-asset',{id:a.id,extra:`data-case="${h(a.c.id)}"`})]))):empty('No asset records','Prepare a plan in a case, then add the intended hardware.'))}${panel('Delivery plans','Open the selected case to complete its plan.',`<div class="delivery-cards">${ctx.w.cases.map(c=>{const ready=readiness(c,ctx.w.configs);return `<div><div class="card-top"><strong>${h(c.name)}</strong>${chip(`${8-DEPLOY_CHECKS.filter(([key])=>!c.deployment.checklist[key]).length}/8 review items`)}</div><p>${h(c.site)}</p>${progress((8-DEPLOY_CHECKS.filter(([key])=>!c.deployment.checklist[key]).length)/8*100)}<small>${ready.gaps.length} open readiness items</small>${viewLink(c,'Deployment','Open plan')}</div>`;}).join('')}</div>`)}`;
 }
 
-function renderTelemetry() {
-  if (!document.getElementById("simTelemetry")) return;
-  const simData = simulation?.currentTelemetry?.() || { activeStep: 0, robotProgress: 0, humanProgress: 0 };
-  const step = model.process.steps[simData.activeStep] || model.process.steps[0];
-  document.getElementById("simProcessTitle").textContent = model.process.name;
-  const telemetry = [
-    { label: "Active workflow step", value: step.name },
-    { label: "Hybrid robot progress", value: percent(simData.robotProgress * 100) },
-    { label: "Manual progress", value: percent(simData.humanProgress * 100) },
-    { label: "Manual cycle time", value: `${model.manualCycleSec.toFixed(1)} sec` },
-    { label: "Hybrid cycle time", value: `${model.robotCycleSec.toFixed(1)} sec` },
-    { label: "Projected throughput gain", value: percent(model.throughputGain) },
-    { label: "Primary OEM", value: model.robot.name },
-    { label: "Decision", value: model.decision.title }
-  ];
-  document.getElementById("simTelemetry").innerHTML = telemetry.map(item => `
-    <div class="telemetry-item"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></div>
-  `).join("");
+function catalogView(ctx) {
+  return `<div class="page-heading"><div><div class="eyebrow">SUPPLY / TECHNOLOGY LIBRARY</div><h1>Compare a complete configuration.</h1><p>Hardware, tools, software, conditions, evidence, and commercial terms.</p></div>${button('Add configuration','new-config',{kind:'primary',iconName:'plus'})}</div><div class="callout"><span>${icon('file')}</span><div><strong>All supplied envelopes are fictional planning records.</strong><p>The AGIBOT target remains unknown until the model, tools, stack, and performance are confirmed.</p></div></div><div class="technology-cards">${ctx.w.configs.map(v=>`<article class="technology-card"><div class="card-top">${chip(v.family,'purple')}${chip(v.source,v.source==='Unknown'?'amber':'')}</div><div class="technology-symbol">${icon(v.family==='Vision'?'activity':v.family==='Assist tool'?'person':'robot')}</div><h2>${h(v.name)}</h2><p>${h(v.description)}</p><div class="spec-grid"><div><span>Payload</span><b>${v.payloadKg==null?'Unknown':`${number(v.payloadKg)} kg`}</b></div><div><span>Reach</span><b>${v.reachM==null?'Unknown':`${number(v.reachM)} m`}</b></div><div><span>Purchase / unit</span><b>${euro(v.price)}</b></div><div><span>Usable window</span><b>${v.source==='Unknown'?'Unknown':`${number(100-v.chargePct-v.downtimePct)}%`}</b></div></div><div class="skill-tags">${v.skills.map(s=>`<span>${h(s)}</span>`).join('')}</div><div class="card-footer"><small>Record v${v.revision} · ${h(v.sourceDate)}</small>${button('View / edit','edit-config',{id:v.id,kind:'text',iconName:'arrow'})}</div></article>`).join('')}</div>`;
 }
 
-function renderTimeline() {
-  if (!document.getElementById("workflowTimeline")) return;
-  const simData = simulation?.currentTelemetry?.() || { activeStep: 0 };
-  document.getElementById("workflowTimeline").innerHTML = model.process.steps.map((step, idx) => {
-    const cls = idx < simData.activeStep ? "complete" : idx === simData.activeStep ? "active" : "";
-    return `
-      <article class="timeline-step ${cls}">
-        <span class="bubble">${idx + 1}</span>
-        <div><h4>${escapeHtml(step.name)}</h4><p>${escapeHtml(step.detail)}</p></div>
-      </article>
-    `;
-  }).join("");
+function evidenceView(ctx) {
+  const sourceRows=ctx.w.cases.flatMap(c=>c.sources.map(s=>row([`<strong>${h(s.name)}</strong><small>${h(s.type)}</small>`,h(c.name),chip(s.status,['Unknown','Out of date'].includes(s.status)?'amber':''),h(s.note),viewLink(c,'Inputs','Review source')])));
+  const qs=ctx.questions.filter(q=>(!ctx.questionGroup||q.group===ctx.questionGroup)&&(!ctx.questionSearch||`${q.question} ${q.proposed_default}`.toLowerCase().includes(ctx.questionSearch.toLowerCase())));
+  return `<div class="page-heading"><div><div class="eyebrow">EVIDENCE / OPEN DECISIONS</div><h1>Make the unknowns visible.</h1><p>Keep source quality separate from technical fit and financial return.</p></div></div>${panel('Source register','Sources are linked to their case and can be reviewed there.',table(['Source','Case','Status','Notes',''],sourceRows))}${panel('Questions from the design review','Record answers for the current case. Proposed defaults remain visible.',`<div class="toolbar"><label class="inline-label">Area<select data-action="question-group" aria-label="Question area"><option value="">All areas</option>${safeOptions([...new Set(ctx.questions.map(q=>q.group))],ctx.questionGroup)}</select></label><div class="search-box">${icon('search')}<input type="search" aria-label="Search questions" data-action="question-search" value="${h(ctx.questionSearch)}" placeholder="Search the open questions"></div><small>Answers apply to ${h(ctx.c.name)}</small></div><div class="question-list">${qs.map(q=>`<details><summary><span class="question-id">${q.id}</span><span>${h(q.question)}</span>${chip(ctx.c.answers[q.id]?'Answer recorded':q.decision_time,ctx.c.answers[q.id]?'green':'')}</summary><div class="question-body"><div><small>PROPOSED DEFAULT</small><p>${h(q.proposed_default)}</p><small>PROPOSED OWNER</small><p>${h(q.proposed_owner)}</p></div><div class="field"><label for="answer-${q.id}">Case answer</label><textarea id="answer-${q.id}" data-question="${q.id}" rows="3" placeholder="Record the answer, source, and remaining limits.">${h(ctx.c.answers[q.id]||'')}</textarea></div></div></details>`).join('')}</div>`)}`;
 }
 
-function drawPerformanceChart() {
-  const data = [
-    { label: "Cycle time", unit: "sec", manual: model.manualCycleSec, robot: model.robotCycleSec, lowerBetter: true },
-    { label: "FTE/shift", unit: "FTE", manual: model.manualFte, robot: model.assistedFte, lowerBetter: true },
-    { label: "Error rate", unit: "%", manual: model.process.manual.errorRate, robot: model.process.robot.errorRate, lowerBetter: true },
-    { label: "Throughput", unit: "/hr", manual: model.manualJobsPerHour, robot: model.robotJobsPerHour, lowerBetter: false }
-  ];
-  drawGroupedBarChart(document.getElementById("performanceChart"), data, {
-    series: ["manual", "robot"],
-    labels: { manual: "Manual", robot: "Hybrid-assisted" },
-    colors: { manual: "#3c6df0", robot: "#ef2f73" }
+function caseView(ctx) {
+  const c=ctx.c;
+  return `<div class="case-heading"><div><div class="eyebrow">EVALUATION / ${h(c.site)}</div><h1>${h(c.name)}</h1><p>${h(c.purpose)}</p></div><div class="case-heading-actions"><select aria-label="Current case" data-action="select-case">${safeOptions(ctx.w.cases.map(x=>[x.id,x.name]),c.id)}</select>${button('Edit case','edit-case',{kind:'quiet'})}</div></div><div class="case-meta">${chip(c.stage,'green')}${chip(c.sample?'Sample inputs':'User inputs')}${chip(`Version ${c.revision}`)}<span>${icon('person')}${h(c.owner)}</span><span>${icon('globe')}${h(c.country)}</span><span class="meta-right">${button('Export case','export-case',{kind:'text',iconName:'down'})}${button('Report','report',{kind:'text',iconName:'file'})}</span></div><nav class="case-tabs" aria-label="Case stages">${CASE_TABS.map((tab,i)=>`<button data-action="case-tab" data-id="${tab}" class="${ctx.tab===tab?'active':''}"><span>${String(i+1).padStart(2,'0')}</span>${tab}</button>`).join('')}</nav><div class="case-content">${({Overview:caseOverview,Inputs:inputsView,Process:processView,Matches:matchesView,Scenarios:scenariosView,Results:resultsView,Deployment:deploymentView,Learning:learningView}[ctx.tab]||caseOverview)(ctx)}</div>`;
+}
+
+function caseOverview(ctx) {
+  const {c}=ctx, rec=recommendCase(c,ctx.w.configs), result=selectedResult(ctx), sourceGaps=c.sources.filter(s=>s.status==='Unknown').length;
+  return `<div class="overview-hero"><div><span class="eyebrow">THE NEXT USEFUL DECISION</span><h2>${rec.best?'Test a complete hybrid process.':'Complete the process evidence.'}</h2><p>${h(rec.text)}</p>${button('Review the process','case-tab',{id:'Process',kind:'primary',iconName:'arrow'})}</div><div class="overview-illustration" aria-hidden="true"><span class="illustration-human">${icon('person')}</span><i>+</i><span class="illustration-robot">${icon('robot')}</span><div class="illustration-line"></div><span class="illustration-label">One process. Shared work.</span></div></div><div class="metrics">${metric('Daily demand',number(c.baseline.demandDaily,0),'Across all shifts · sample baseline','','layers')}${metric('Actions in the process',String(c.actions.length),'Each action has timing and capability needs','','file')}${metric('Forecast annual cash',euro(rec.best?.annualNet),'Best tested feasible option','green','brief')}${metric('Source gaps',String(sourceGaps),'Unknown sources need a clear next action','amber','file')}</div><div class="two-columns">${panel('Case brief','Keep the demand side and supply side connected.',`<dl class="definition-list"><div><dt>Demand</dt><dd>${h(c.name)} · ${number(c.baseline.demandDaily,0)} units/day</dd></div><div><dt>Human baseline</dt><dd>${number(c.baseline.peoplePerShift)} people/shift · ${c.baseline.shifts} shifts</dd></div><div><dt>Selected option</dt><dd>${h(result.name)}</dd></div><div><dt>Financial view</dt><dd>${h(c.economics.benefitMode)} · ${c.economics.retainedPct}% retained labour benefit</dd></div><div><dt>Technology route</dt><dd>${h(c.deployment.route)}</dd></div></dl>`)}${panel('Next actions','Work through the case or open any draft stage.',`<div class="next-list">${[['Inputs','Check the baseline','Reconcile demand, people, and task time.'],['Matches','Check action-level fit','Review blocked and unknown configurations.'],['Results','Review the business case','Separate time removed, staffing, and cash.'],['Deployment','Prepare the delivery path','Name the hardware, stack, tests, and owner.']].map(([tab,title,desc])=>`<button data-action="case-tab" data-id="${tab}"><span class="next-icon">${icon(tab==='Deployment'?'robot':'arrow')}</span><span><strong>${title}</strong><small>${desc}</small></span>${icon('arrow')}</button>`).join('')}</div>`)}</div>`;
+}
+
+function inputsView(ctx) {
+  const {c}=ctx,b=c.baseline,e=c.economics;
+  const baseResult=evaluateScenario(c,c.scenarios.find(x=>x.kind==='manual')||c.scenarios[0],ctx.w.configs);
+  const baselineCheck=panel('Baseline reconciliation','Check the staffing and timing model before interpreting the opportunity.',table(['Measure','Entered or calculated value','Basis'],[row(['Human work per unit',`${number(baseResult.baselineSeconds)} s`,'Sum of action time × frequency. Parallel work is excluded from this screening calculation.']),row(['Average / peak demand',`${number(baseResult.avgHour)} / ${number(baseResult.peakHour)} units/h`,'Daily demand across all operating shifts. Peak factor is used for capacity, not annual demand.']),row(['Human capacity',`${number(baseResult.capacity)} units/h`,baseResult.meetsDemand?'The entered staffing meets the peak screening requirement.':'The entered staffing or time model does not establish enough peak capacity. Reconcile it with site evidence.']),row(['Annual staffing positions',number(baseResult.baselineFte),'People per shift × shifts × annual cover factor. Confirm the engineering model and observed allocation.']),row(['Observed output',b.observedUph==null?'Not recorded':`${number(b.observedUph)} units/h`,'A site observation is separate from the engineering and action-time estimates.'])]));
+  return `${panel('Source files and evidence','Add a file or record a source. CAD, video, and model files remain references until an adapter is connected.',table(['Source / type','Status','Date','Basis / missing data',''],c.sources.map(s=>row([`<strong>${h(s.name)}</strong><small>${h(s.type)}</small>`,chip(s.status,['Unknown','Out of date'].includes(s.status)?'amber':''),h(s.date||'Not known'),`<span>${h(s.note)}</span>${s.fileId?`<a class="file-link" href="/api/files/${encodeURIComponent(s.fileId)}" target="_blank" rel="noopener">Open stored file</a>`:''}`,button('Edit','edit-source',{id:s.id})]))),`<div class="action-group">${button('Add source','new-source',{iconName:'plus'})}${button('Attach file','attach-file',{iconName:'file'})}<input type="file" id="source-file" hidden></div>`)}<div class="two-columns">${panel('Demand and operating calendar','Use the same demand and calendar for every option.',gridFields([
+    inputField('baseline.demandDaily','Daily demand',b.demandDaily,{unit:'units/day'}),inputField('baseline.peakFactor','Peak factor',b.peakFactor,{unit:'× average hour',min:1}),inputField('baseline.shifts','Shifts per day',b.shifts,{step:1,min:1}),inputField('baseline.shiftHours','Hours per shift',b.shiftHours,{unit:'h'}),inputField('baseline.daysYear','Operating days',b.daysYear,{unit:'days/year',step:1,min:1,max:366}),inputField('baseline.qualityTargetPct','First-pass quality target',b.qualityTargetPct,{unit:'%',max:100,help:'Planning assumption. Check actual task and process quality evidence.'})
+  ]))}${panel('Human baseline','Positions are counted per shift. Annual FTE positions include every shift.',gridFields([
+    inputField('baseline.peoplePerShift','Current people per shift',b.peoplePerShift,{unit:'people',step:1}),inputField('baseline.minPeoplePerShift','Minimum retained coverage',b.minPeoplePerShift,{unit:'people/shift',step:1}),inputField('baseline.salaryAnnual','Fully loaded annual cost',b.salaryAnnual,{unit:'EUR/person/year'}),inputField('baseline.humanUtilPct','Productive share of shift',b.humanUtilPct,{unit:'%',min:1,max:100}),inputField('baseline.staffingCover','Staffing cover factor',b.staffingCover,{unit:'×',min:1,help:'Cover for the annual staffing plan. Do not add absence twice.'}),inputField('baseline.observedUph','Observed average output',b.observedUph,{unit:'units/h',help:'Optional. Record the observation period and source in the input register.'}),inputField('baseline.routeM','Reference route length',b.routeM,{unit:'m',help:'Context only. The current model uses recorded task times, not a generated travel path.'})
+  ]))}</div>${panel('Engineering and layout context','This annotated plan is a sample. Enter dimensions and attach the real site plan.',`<div class="layout-preview"><div class="layout-grid"><div class="layout-zone infeed">Infeed<small>Presented totes</small></div><div class="layout-zone human-zone">Human work<small>Inspect · scan · exchange</small></div><div class="layout-route">${icon('arrow')}<span>${number(b.routeM)} m · assumed</span>${icon('arrow')}</div><div class="layout-zone robot-zone">Robot work<small>Lift · move · place</small></div><div class="layout-zone destination">Sort points<small>Destination carriers</small></div><div class="layout-charge">${icon('robot')} Charge / recovery area</div></div><div class="layout-note">Sample 2D context<br>No CAD interpretation<br>No collision or safety check</div></div>`)}${panel('Commercial and business-case inputs','All amounts are EUR scenario inputs. Price and service inclusions are stored in the technology library.',gridFields([
+    selectField('economics.commercialModel','Commercial model',e.commercialModel,[['purchase','Purchase'],['lease','Lease'],['raas','RaaS']]),selectField('economics.benefitMode','Benefit basis',e.benefitMode,['Avoided hires','Cash labour reduction','Redeployed capacity'],{help:'Redeployed capacity is shown as capacity value, not cash labour savings.'}),inputField('economics.cashableFte','Positions that can create cash benefit',e.cashableFte,{unit:'annual FTE',help:'Explicit assumption. The model caps this at the achievable staffing change.'}),inputField('economics.retainedPct','Labour benefit retained',e.retainedPct,{unit:'%',max:100}),inputField('economics.integration','Integration and commissioning',e.integration,{unit:'EUR once'}),inputField('economics.siteChanges','Tools and site changes',e.siteChanges,{unit:'EUR once'}),inputField('economics.softwareAnnual','Platform / software cost',e.softwareAnnual,{unit:'EUR/year'}),inputField('economics.supportAnnual','Additional site support',e.supportAnnual,{unit:'EUR/year',help:'Exclude support already included in the robot price or contract.'}),inputField('economics.rampMonths','Months before full benefit',e.rampMonths,{unit:'months',max:12}),inputField('economics.horizonYears','Study / contract horizon',e.horizonYears,{unit:'years',min:1,max:20,step:1}),inputField('economics.discountPct','Discount rate',e.discountPct,{unit:'%',max:100,help:'Scenario assumption, not an approved finance rate.'}),inputField('economics.residualValue','Residual value at study end',e.residualValue,{unit:'EUR'}),inputField('economics.otherBenefitAnnual','Other captured cash benefit',e.otherBenefitAnnual,{unit:'EUR/year',help:'Only enter a supported benefit that is not already counted.'}),inputField('economics.handoffSec','Human work per handoff',e.handoffSec,{unit:'s/transition'})
+  ]))}${baselineCheck}${panel('Data completeness','An empty number stays unknown. Correct invalid entries before you use a result.',`<div class="callout subtle"><div><strong>Source status does not follow financial performance.</strong><p>A positive business case cannot turn sample task times into measured performance. The engineering-model and MTM reconciliation remains a visible source review.</p></div></div>`)}`;
+}
+
+function processView(ctx) {
+  const c=ctx.c,s=selected(ctx),r=selectedResult(ctx);
+  return `${panel('Process actions','Enter the actual method. Sequence, timing, dependencies, and recovery remain editable.',`<div class="process-summary"><div><b>${c.actions.length}</b><span>actions</span></div><div><b>${number(c.actions.reduce((sum,a)=>sum+(a.seconds||0)*(a.frequency||0),0))} s</b><span>human work per unit</span></div><div><b>${r.automatedActions??0}</b><span>machine-assigned actions</span></div><div><b>${r.coveragePct==null?'—':number(r.coveragePct)+'%'}</b><span>baseline time assigned to technology</span></div></div><div class="process-map">${c.actions.map((a,i)=>{const actor=s.assignments[a.id],v=ctx.w.configs.find(v=>v.id===actor);return `<button class="action-node ${actor?'machine':''}" data-action="edit-action" data-id="${h(a.id)}"><div><span>${String(i+1).padStart(2,'0')}</span>${icon(actor?'robot':'person')}</div><strong>${h(a.name)}</strong><small>${number(a.seconds)} s × ${number(a.frequency)} · ${h(a.skill)}</small><span class="actor-label">${h(v?.name||'Human')}</span></button>`;}).join('')}</div>`,`${button('Paste actions','paste-actions',{iconName:'file'})}${button('Import actions','import-actions',{iconName:'file'})}${button('Add action','new-action',{kind:'primary',iconName:'plus'})}<input id="actions-import" type="file" accept=".csv,.json,.txt" hidden>`)}${panel('Action detail','The human time is active work. It is not always the total elapsed process time.',table(['# / action','Skill','Human time','Needs','Source','Dependency / recovery',''],c.actions.map((a,i)=>row([`<strong>${i+1}. ${h(a.name)}</strong><small>${h(a.taskGroup||'Task group not set')} · ${h(a.timingMethod||'Timing method not set')}</small><small>${h(a.note)}</small>`,h(a.skill),`${number(a.seconds)} s × ${number(a.frequency)}`,`${number(a.payloadKg)} kg · ${number(a.reachM)} m reach<br>${number(a.aisleM)} m aisle`,chip(a.source),`<small>${h(c.actions.find(x=>x.id===a.dependency)?.name||'Start')}${a.parallel?' · Parallel':''}</small>${h(a.recovery)}`,button('Edit','edit-action',{id:a.id})]))))}<div class="callout"><span>${icon('person')}</span><div><strong>Partial augmentation changes the method.</strong><p>Keep scanning, carrier exchange, support, and recovery work with a named actor. Splitting a load-handling bundle needs a valid handoff method. Recorded parallel work requires a more detailed resource model.</p></div></div>`;
+}
+
+function matchesView(ctx) {
+  const c = ctx.c, s = selected(ctx);
+  const matchRows = c.actions.map(a => row([
+    `<strong>${h(a.name)}</strong><small>${number(a.seconds)} s · ${h(a.skill)}</small>`,
+    ...ctx.w.configs.map(v => {
+      const f = fitAction(a, v);
+      return `<button class="fit-cell ${f.status}" data-action="fit-detail" data-id="${h(a.id)}" data-config="${h(v.id)}" aria-label="${h(a.name)}: ${h(v.name)}: ${f.status}">${icon(f.status === 'fit' ? 'check' : f.status === 'blocked' ? 'close' : 'file')}<span>${f.status === 'fit' ? 'Fits inputs' : f.status === 'blocked' ? 'Blocked' : 'Unknown'}</span></button>`;
+    })
+  ]));
+  const assignedRows = c.actions.map(a => {
+    const actor = s.assignments[a.id] || 'human';
+    const f = actor === 'human' ? null : fitAction(a, ctx.w.configs.find(v => v.id === actor));
+    return row([
+      `<strong>${h(a.name)}</strong>`,
+      `<select data-assignment="${h(a.id)}" aria-label="Actor for ${h(a.name)}">${safeOptions([['human', 'Human'], ...ctx.w.configs.map(v => [v.id, v.name])], actor)}</select>`,
+      f ? chip(f.status === 'fit' ? 'Fits recorded inputs' : f.status, f.status === 'fit' ? 'green' : 'amber') : chip('Human')
+    ]);
+  });
+  const toolbar = `<div class="toolbar">${scenarioPicker(ctx)}${button('Generate matched options','generate-options',{kind:'primary',iconName:'layers'})}<div class="legend"><span class="fit-dot green-dot"></span>Fit to recorded inputs<span class="fit-dot red-dot"></span>Blocked<span class="fit-dot amber-dot"></span>Unknown</div></div>`;
+  const matrix = panel('Action-to-technology match', 'Check each hard requirement. A commercial score cannot cancel a failed physical constraint.', table(['Action / human time', ...ctx.w.configs.map(v => v.name)], matchRows, 'match-matrix'));
+  const assignment = panel('Assign the work', 'Edit the selected option. Blocked or unknown assignments remain drafts and cannot support an evaluation.', table(['Action', 'Assigned actor', 'Model status'], assignedRows), button('View team and fleet', 'case-tab', { id: 'Scenarios', kind: 'primary', iconName: 'arrow' }));
+  return toolbar + matrix + assignment + `<div class="callout subtle"><div><strong>Skills belong to a complete configuration.</strong><p>The skill alone does not establish capability. Payload, reach, route, tool, software, task time, conditions, and evidence must also fit.</p></div></div>`;
+}
+
+function scenariosView(ctx) {
+  const c=ctx.c,s=selected(ctx),r=selectedResult(ctx),results=evaluateCase(c,ctx.w.configs);
+  const used=[...new Set(Object.values(s.assignments||{}).filter(id=>id!=='human'))];
+  return `<div class="toolbar">${scenarioPicker(ctx)}<div class="action-group">${button('Duplicate option','duplicate-scenario',{iconName:'plus'})}${button('New option','new-scenario',{iconName:'plus'})}${button('Generate matched options','generate-options',{kind:'primary',iconName:'layers'})}</div></div><div class="two-columns">${panel('Team and fleet','Size the machines for the work they perform.',used.length?`<div class="fleet-inputs">${used.map(id=>{const v=ctx.w.configs.find(v=>v.id===id);return `<div class="fleet-input"><div class="fleet-icon">${icon('robot')}</div><div><strong>${h(v?.name||id)}</strong><small>${h(v?.source)} · complete configuration</small></div><label>Units<input type="number" min="1" max="100" step="1" data-count="${h(id)}" value="${s.counts[id]??1}" aria-label="Fleet count for ${h(v?.name||id)}"></label></div>`;}).join('')}</div>`:empty('No machines assigned','Keep the manual comparison or assign work in Matches.'),button('Compare fleet counts','fleet-search',{kind:'primary',iconName:'search',extra:used.length?'':'disabled'}))}${panel('Modelled process performance','Peak demand and the bottleneck limit the whole process.',`<div class="result-status">${resultStatus(r)}</div><dl class="definition-list"><div><dt>Average / peak demand</dt><dd>${number(r.avgHour)} / ${number(r.peakHour)} units/h</dd></div><div><dt>Process capacity</dt><dd>${number(r.capacity)} units/h</dd></div><div><dt>Required people</dt><dd>${number(r.peoplePerShift)} per shift</dd></div><div><dt>Remaining human work</dt><dd>${number(r.humanSeconds)} s/unit</dd></div><div><dt>Handoffs / recovery</dt><dd>${r.handoffs??'—'} transitions · ${number(r.recoverySeconds)} s/unit recovery</dd></div><div><dt>Bottleneck</dt><dd>${h(r.bottleneck||'Complete the inputs')}</dd></div></dl>`)}</div>${r.errors.length?panel('Inputs or constraints to resolve','The app has not calculated a valid result.',`<ul class="error-list">${r.errors.map(e=>`<li>${h(e)}</li>`).join('')}</ul>`):''}${r.fleet.length?panel('Resource capacity','Charge and downtime are disjoint shares of the same operating window. A single retry is allowed in this screening model.',table(['Configuration','Count / required bound','Work + retry time','Usable window','Capacity','Source'],r.fleet.map(f=>row([h(f.name),`${f.count} / ${f.required??'—'}`,`${number(f.busySeconds)} + ${number(f.retrySeconds-f.busySeconds)} s`,`${number(f.usablePct)}%`,`${number(f.rate)} units/h`,chip(f.source)])))):''}${panel('Options in this case','Current and improved manual methods remain in the comparison.',table(['Option','Status','People / shift','Machines','Capacity','Annual net',''],results.map(x=>row([`<strong>${h(x.name)}</strong>`,resultStatus(x),number(x.peoplePerShift),String(x.fleet.reduce((sum,f)=>sum+f.count,0)),`${number(x.capacity)} /h`,euro(x.annualNet),button('Select','choose-scenario',{id:x.id,kind:c.selectedScenarioId===x.id?'primary':'secondary'})]))))}${panel('Search scope and limits','The fleet search tests one to six units per assigned configuration, with up to three configurations.',`<p>Changing fleet count can remove a machine bottleneck. It does not remove remaining human actions or prove traffic, charge scheduling, safe handoffs, or performance at the site. The app reports every tested count and its status.</p>`)}`;
+}
+
+function cashChart(result) {
+  if (!result.valid) return empty('Cash flow is not available','Complete the inputs and constraints.');
+  const points=[{year:0,cumulative:-result.upfront},...result.cashflows], max=Math.max(1,...points.map(p=>Math.abs(p.cumulative))), w=640,hgt=215, x=i=>36+i*(w-72)/(points.length-1), y=v=>105-v/max*75;
+  return `<svg viewBox="0 0 ${w} ${hgt}" class="cash-chart" role="img" aria-label="Cumulative incremental cash flow in EUR"><line x1="30" x2="615" y1="105" y2="105" stroke="#c5d6d0" stroke-dasharray="4 5"/><text x="8" y="100" fill="#61756e" font-size="11">0</text><path d="${points.map((p,i)=>`${i?'L':'M'}${x(i)},${y(p.cumulative)}`).join(' ')}" fill="none" stroke="#177860" stroke-width="3"/>${points.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p.cumulative)}" r="4" fill="#177860"/><text x="${x(i)}" y="${y(p.cumulative)+(p.cumulative<0?20:-12)}" text-anchor="middle" fill="#264d40" font-size="11">${Math.round(p.cumulative/1000)}k</text><text x="${x(i)}" y="200" text-anchor="middle" fill="#61756e" font-size="11">Year ${p.year}</text>`).join('')}</svg>`;
+}
+
+function resultsView(ctx) {
+  const c=ctx.c,s=selected(ctx),r=selectedResult(ctx),rec=recommendCase(c,ctx.w.configs),currentDecision=c.decision?.revision===c.revision&&c.decision.result?.modelVersion===MODEL_VERSION;
+  return `<div class="toolbar">${scenarioPicker(ctx)}${button('Export recommendation','report',{iconName:'file'})}</div><div class="recommendation"><div class="recommendation-icon">${icon('brief')}</div><div><small>RECOMMENDATION / TESTED SET</small><h2>${rec.best?h(rec.best.name):'No supported candidate'}</h2><p>${h(rec.text)}</p></div><div>${rec.best&&rec.best.id!==s.id?button('Use best candidate','choose-scenario',{id:rec.best.id,kind:'primary'}):''}${chip(rec.best?'Next: evidence study':'Next: revise or collect data',rec.best?'green':'amber')}</div></div><div class="metrics">${metric('Annual net cash saving',euro(r.valid?r.annualNet:null),'Steady year · check the horizon and NPV',r.annualNet>0?'green':'','brief')}${metric('Upfront cash',euro(r.valid?r.upfront:null),'Hardware + integration + site changes','','layers')}${metric('Payback',r.valid&&r.payback!=null?`${number(r.payback)} years`:'No payback','Within the entered study horizon','','clock')}${metric('Process cost per good unit',r.costPerUnit==null?'Not known':unitEuro(r.costPerUnit),'Annual staffing + added cost + spread upfront','','activity')}</div>${r.errors.length?panel('Result unavailable','Resolve these items before you use financial outputs.',`<ul class="error-list">${r.errors.map(x=>`<li>${h(x)}</li>`).join('')}</ul>`):''}<div class="two-columns">${panel('From work time to cash','Each step has a separate meaning.',`<div class="benefit-bridge">${[['Baseline time assigned to machines',r.coveragePct==null?'—':`${number(r.coveragePct)}%`,'A time share, not an employee count.'],['Remaining human work',`${number(r.humanSeconds)} s/unit`,'Includes handoffs, support at assist tools, and recovery.'],['Potential positions released',`${number(r.potentialFte)} annual FTE`,'From a whole-shift staffing calculation.'],['Positions with cash benefit',`${number(r.cashFte)} annual FTE`,c.economics.benefitMode],['Retained labour benefit',euro(r.capturedLaborBenefit),`${c.economics.retainedPct}% retained in this viewpoint.`],['Added annual cost',euro(r.annualAddedCost),'Robot service, energy, software, site support, and any extra staffing.']].map(([label,value,help],i)=>`<div><span class="bridge-index">${i+1}</span><div><strong>${label}</strong><small>${h(help)}</small></div><b>${h(value)}</b></div>`).join('')}</div>`)}${panel('Cumulative cash flow','Upfront cash is paid at year zero. The first year includes the entered ramp-up.',cashChart(r)+`<div class="mini-stats"><div><b>${euro(r.valid?r.npv:null)}</b><span>NPV · ${c.economics.discountPct}% scenario rate</span></div><div><b>${euro(r.valid?r.lifetimeNet:null)}</b><span>Net cash over ${c.economics.horizonYears} years</span></div></div>`)}</div><div class="evidence-grid">${panel('Technical fit',r.meetsDemand&&r.meetsQuality?'Requirements met in this model':'Review the capacity or quality gap',`<strong class="status-value">${r.valid&&r.meetsDemand&&r.meetsQuality?'Conditional fit':'Not established'}</strong><p>Fit applies to the recorded configuration, task bundle, and operating assumptions.</p>`)}${panel('Performance evidence',r.evidence||'Not established',`<strong class="status-value amber-text">${h(r.evidence||'Data needed')}</strong><p>No calibrated probability is available. Supplier data, simulation, and field tests need a stated validity range.</p>`)}${panel('Economic robustness','Check the adverse scenarios below.',`<strong class="status-value">${r.breakEvenCapturePct==null?'Not known':`${number(r.breakEvenCapturePct)}% capture`}</strong><p>Simple steady-year break-even labour-benefit capture. It does not prove payback within the contract.</p>`)}</div>${panel('Scenario stress test','These are named assumptions, not probabilities.',table(['Scenario','Process status','Required people / shift','Capacity','Annual net','Payback'],stressScenario(c,s,ctx.w.configs).map(x=>row([h(x.stressName),resultStatus(x),number(x.peoplePerShift),`${number(x.capacity)} /h`,euro(x.valid?x.annualNet:null),x.valid&&x.payback!=null?`${number(x.payback)} years`:'No payback']))))}${panel('Cash-flow detail','Cash costs are separate from accounting depreciation.',table(['Year','Captured benefit','Added cost','Net cash','Cumulative'],[{year:0,benefit:r.valid?0:null,cost:r.upfront,net:r.upfront==null?null:-r.upfront,cumulative:r.upfront==null?null:-r.upfront},...r.cashflows].map(x=>row([String(x.year),euro(x.benefit),euro(x.cost),euro(x.net),euro(x.cumulative)]))))}${panel('Record the next decision','This records a local planning decision. It does not authorize a robot or a site pilot.',`<div class="decision-summary">${c.decision?`<div>${chip(currentDecision?'Current decision':'Out of date',currentDecision?'green':'amber')}<strong>${h(c.decision.outcome)}</strong><p>${h(c.decision.reason)}</p><small>${h(c.decision.owner)} · Case v${c.decision.revision}</small></div>`:'<p>No decision has been recorded for this version.</p>'}${button('Record decision','record-decision',{kind:'primary',iconName:'check'})}</div>`)}${panel('Model limits and warnings','Keep these with the recommendation.',`<ul class="warning-list">${r.warnings.map(x=>`<li>${h(x)}</li>`).join('')}<li>The staffing plan is a planning bound. Minimum coverage, time fragments, and shared work must be checked at the site.</li><li>All sample evidence remains sample evidence, even when the cash result is positive.</li></ul>`)}`;
+}
+
+function deploymentView(ctx) {
+  const c=ctx.c,d=c.deployment,ready=readiness(c,ctx.w.configs),checked=DEPLOY_CHECKS.filter(([key])=>d.checklist[key]).length;
+  return `<div class="deployment-heading"><div><h2>From a selected option to a site pilot.</h2><p>Keep the hardware, software, tests, and accountable roles together.</p></div>${chip(`${ready.gaps.length} open readiness items`,'amber')}</div><div class="deployment-path">${['Plan','Configure / train','Test release','Prepare site','Supervised pilot','Operate / improve'].map((t,i)=>`<div><span>${i+1}</span><strong>${t}</strong></div>`).join('')}</div><div class="two-columns">${panel('Execution and release plan','Use OEM commissioning, policy/model adaptation, or both. AWS and the OEM must define the supported route.',gridFields([
+    selectField('deployment.route','Execution route',d.route,['OEM configuration','Policy / model adaptation','OEM configuration + policy adaptation','To be defined']),inputField('deployment.target','Target hardware and tool',d.target,{type:'text'}),inputField('deployment.release','Release / model / policy version',d.release,{type:'text'}),inputField('deployment.supportOwner','Accountable delivery / support owner',d.supportOwner,{type:'text'}),noteField('deployment.siteNotes','Site preparation and operating limits',d.siteNotes),noteField('deployment.interfaceNotes','Interfaces and recovery method',d.interfaceNotes),noteField('deployment.trainingNotes','Data and training plan, if required',d.trainingNotes,'Name datasets, labels, simulation assets, supported stack, test cases, and expected outputs.'),noteField('deployment.rollback','Fallback and rollback version',d.rollback),noteField('deployment.pilotNotes','Pilot measures and stop rules',d.pilotNotes)
+  ]))}${panel('Readiness review','Review items are local records. They do not certify the installation.',`<div class="readiness-progress"><b>${checked}<span>/ 8</span></b><div><strong>Review items recorded</strong>${progress(checked/8*100)}</div></div><div class="check-list">${DEPLOY_CHECKS.map(([key,title,detail])=>`<label><input type="checkbox" data-check="${key}" ${d.checklist[key]?'checked':''}><span><strong>${title}</strong><small>${detail}</small></span></label>`).join('')}</div>`,button('Review readiness','review-readiness',{kind:'primary',iconName:'check'}))}</div>${panel('External service plan','These adapters are not connected. Use them to define the work and output contract.',`<div class="adapter-grid">${[['CAD / environment','Layout, objects, dimensions, and material properties','Mapped model + assumptions + validation issues'],['Process / physics','Versioned process, configuration, task conditions, and test cases','Times, successes, failures, recovery, samples, and limits'],['Training / policy','Supported stack, data, task definitions, tests, and compute','Versioned policy/model + metrics + failure tests'],['Hardware transfer','Approved release, supported hardware, site tests, and fallback','Transfer record + checks + supervised pilot observations']].map(([name,input,output])=>`<div class="adapter-card"><div class="card-top"><strong>${name}</strong>${chip('Not connected')}</div><small>INPUT</small><p>${input}</p><small>REQUIRED OUTPUT</small><p>${output}</p>${button('Prepare request','adapter-request',{id:name,kind:'text',iconName:'file'})}</div>`).join('')}</div>`)}${panel('Test and pilot records','Every test links to a case version. A material change requires a new test.',d.testResults.length?table(['Test','Result','Source / notes','Case version',''],d.testResults.map(t=>row([h(t.name),chip(t.status,t.status==='Pass'?'green':'amber'),`<strong>${h(t.source)}</strong><small>${h(t.note)}</small>`,chip(`v${t.revision}${t.revision===c.revision?'':' · out of date'}`,t.revision===c.revision?'':'amber'),h(t.date)]))):empty('No tests recorded','Define the task, conditions, source, result, and remaining limits.'),button('Add test record','new-test',{iconName:'plus'}))}${panel('Assets planned for this process','Keep intended, pilot, and operating assets separate.',d.assets.length?table(['Asset','Configuration','Release','Status',''],d.assets.map(a=>row([h(a.name),h(ctx.w.configs.find(v=>v.id===a.configId)?.name||a.configId),h(a.release),chip(a.status),button('Edit','edit-asset',{id:a.id,extra:`data-case="${h(c.id)}"`})]))):empty('No planned assets','Create an asset record from the selected option or add one by hand.'),`${button('Add asset','add-asset',{iconName:'plus'})}${button('Create planned fleet','plan-fleet',{kind:'primary',iconName:'robot'})}`)}`;
+}
+
+function learningView(ctx) {
+  const c=ctx.c,r=selectedResult(ctx), observations=c.observations.map(o=>({...o,metrics:observationMetrics(o)}));
+  return `<div class="page-heading compact"><div><h2>Learn from the actual work.</h2><p>Use a defined observation window. Compare demand, output, quality, human work, and cost.</p></div><div class="action-group">${button('Import observations','import-observations',{iconName:'file'})}${button('Add observation','new-observation',{kind:'primary',iconName:'plus'})}<input type="file" id="observations-import" accept=".csv" hidden></div></div><div class="metrics">${metric('Observation records',String(observations.length),'Sample and measured records stay distinct','','file')}${metric('Expected process rate',`${number(r.capacity)} /h`,'Planning capacity · peak screening model','','activity')}${metric('Expected human work',`${number(r.humanSeconds)} s/unit`,'Retained actions + handoff + recovery','','person')}${metric('Open issues',String(c.issues.filter(i=>i.status!=='Closed').length),'Assign a next action and owner','amber','layers')}</div>${panel('Expected versus observed','Observed output depends on supplied demand. A lower rate alone does not prove lower robot capacity.',observations.length?table(['Window / source','Good output','Good-unit share','Interventions','Human work','Cost / good unit','Follow-up'],observations.map(o=>row([`<strong>${h(o.date)} · ${number(o.hours)} h</strong><small>${h(o.source)}</small>${chip(o.status,o.status==='Measured'?'green':'')}`,`${number(o.metrics.goodUnits,0)} units<small>${number(o.metrics.goodUph)} /h</small>`,o.metrics.qualityPct==null?'—':`${number(o.metrics.qualityPct)}%`,`${number(o.metrics.interventionsPer1000)} /1k`,`${number(o.metrics.humanHoursPer1000)} h/1k`,o.metrics.costPerUnit==null?'—':`${unitEuro(o.metrics.costPerUnit)}`,button('Open issue','observation-issue',{id:o.id})]))):empty('No observations yet','Enter measured or sample trial data. No live telemetry is connected.'))}${panel('Issues and improvement work','Revise the process or configuration, then test the new version.',c.issues.length?table(['Issue','Owner','Status','Action / evidence',''],c.issues.map(i=>row([`<strong>${h(i.title)}</strong><small>${h(i.date)}</small>`,h(i.owner),chip(i.status,i.status==='Closed'?'green':'amber'),h(i.note),button('Edit','edit-issue',{id:i.id})]))):empty('No issues recorded','Record performance gaps, failures, interface problems, and the next test.'),button('Add issue','new-issue',{iconName:'plus'}))}<div class="callout subtle"><span>${icon('activity')}</span><div><strong>Review the evidence before you change the model.</strong><p>A new observation can support a revised task time or failure rate. Record its conditions and source in the technology library. Then evaluate a new case version. This app does not automatically retrain or load hardware.</p></div></div>`;
+}
+
+function renderReport(c, configs) {
+  const scenario=c.scenarios.find(s=>s.id===c.selectedScenarioId)||c.scenarios[0], r=evaluateScenario(c,scenario,configs),rec=recommendCase(c,configs),ready=readiness(c,configs);
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${h(c.name)} — recommendation</title><style>body{font:15px/1.6 'Segoe UI',Arial;color:#183d33;max-width:1000px;margin:40px auto;padding:0 25px}h1{font-size:32px}h2{margin-top:35px}small{display:block;color:#60766e}.banner{background:#f2f5ec;padding:15px;border-left:4px solid #ae9c3d}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:10px;border-bottom:1px solid #d6e0da;vertical-align:top}th{background:#edf4ef}.chip{font-size:12px}footer{margin-top:35px;border-top:1px solid #ccc;padding-top:15px}@media print{body{margin:0}tr{break-inside:avoid}}</style></head><body><small>HYBRID WORKFORCE · PLANNING REPORT · ${new Date().toISOString().slice(0,10)}</small><h1>${h(c.name)}</h1><p>${h(c.site)} · ${h(c.country)} · Case v${c.revision} · ${h(r.modelVersion)}</p><div class="banner">${c.sample?'Sample inputs. ':''}Planning result. No live simulation, robot training, certification, or hardware deployment is performed by this prototype.</div><h2>Recommendation</h2><p>${h(rec.text)}</p><p>Best candidate in the tested set: <strong>${h(rec.best?.name||'None')}</strong>. Selected option: <strong>${h(scenario.name)}</strong>. Status: ${h(r.status)}.</p><h2>Business case</h2>${table(['Measure','Result'],[['Demand',`${number(c.baseline.demandDaily)} units/day · ${number(r.peakHour)} peak units/h`],['Capacity',`${number(r.capacity)} units/h`],['Human staffing',`${number(r.peoplePerShift)} people/shift · ${number(r.scenarioFte)} annual positions`],['Potential / cash-benefit positions',`${number(r.potentialFte)} / ${number(r.cashFte)}`],['Benefit mode',h(c.economics.benefitMode)],['Annual net cash saving',euro(r.valid?r.annualNet:null)],['Upfront cash',euro(r.valid?r.upfront:null)],['Payback',r.valid&&r.payback!=null?`${number(r.payback)} years`:'No supported payback'],['NPV',`${euro(r.valid?r.npv:null)} · ${c.economics.discountPct}% assumed discount rate`],['First-pass quality',r.quality==null?'Not known':`${number(r.quality)}% · model input basis`],['Performance evidence',h(r.evidence||'Missing')]].map(row))}<h2>Work assignment</h2>${table(['Action','Actor','Baseline seconds','Option seconds'],(r.actionRows||[]).map(a=>row([h(a.name),h(configs.find(v=>v.id===a.actor)?.name||'Human'),number(a.humanBaselineSeconds),number(a.seconds)])))}<h2>Fleet</h2>${table(['Configuration','Count','Required planning bound','Evidence'],r.fleet.map(f=>row([h(f.name),String(f.count),String(f.required??'Unknown'),h(f.source)])))}<h2>Cash flow</h2>${table(['Year','Benefit','Added cost','Net','Cumulative'],r.cashflows.map(y=>row([String(y.year),euro(y.benefit),euro(y.cost),euro(y.net),euro(y.cumulative)])))}<h2>Conditions and limits</h2><ul>${[...r.errors,...r.warnings,'The search is bounded. It does not prove a global optimum.','Task-count coverage is not labour or cash savings.','The confidence probability is not calibrated. Review the sources and adverse scenarios.'].map(x=>`<li>${h(x)}</li>`).join('')}</ul><h2>Deployment path</h2><p>${h(c.deployment.route)}. Target: ${h(c.deployment.target)}. Release: ${h(c.deployment.release)}.</p><ul>${ready.gaps.map(x=>`<li>${h(x)}</li>`).join('')}</ul><h2>Source register</h2>${table(['Source','Status','Date','Notes'],c.sources.map(s=>row([h(s.name),h(s.status),h(s.date),h(s.note)])))}<h2>Recorded decision</h2><p>${c.decision?`${h(c.decision.outcome)} · ${h(c.decision.owner)} · Case v${c.decision.revision}. ${h(c.decision.reason)}`:'No planning decision recorded.'}</p><footer>Prepared locally. All figures depend on the entered assumptions and evidence. Retained business benefit is separate from total automation value.</footer></body></html>`;
+}
+
+
+/* questions.js */
+const QUESTION_REGISTER = [{"id": "Q01", "group": "Design", "question": "Does the proposed flow define the correct product scope?", "proposed_default": "Adopt the flow. Keep deployment and measured improvement in the same case.", "proposed_owner": "Radoy and Rohit", "decision_time": "Validate flow", "status": "Open"}, {"id": "Q02", "group": "Design", "question": "Does one shared workflow cover all technologies?", "proposed_default": "Yes. Change the configuration, evidence, and deployment route by technology.", "proposed_owner": "Radoy and Rohit", "decision_time": "Validate flow", "status": "Open"}, {"id": "Q03", "group": "Design", "question": "Are Executive, Evaluations, and Deployments the correct three main views?", "proposed_default": "Use these views. Put libraries under shared navigation.", "proposed_owner": "Radoy", "decision_time": "Validate flow", "status": "Open"}, {"id": "Q04", "group": "Design", "question": "Must the mockup show only the tote PoC or also other use cases?", "proposed_default": "Use the tote case as the main path. Add small, marked sample AMR, arm, and mixed-technology cases.", "proposed_owner": "Radoy and Rohit", "decision_time": "Validate flow", "status": "Open"}, {"id": "Q05", "group": "Design", "question": "Which outcome has priority when cost, capacity, quality, and readiness conflict?", "proposed_default": "Meet hard requirements first. Show the feasible trade-offs. Do not set hidden weights.", "proposed_owner": "Rohit and operations", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q06", "group": "Design", "question": "Which terms and languages must the product use?", "proposed_default": "Use controlled English. Define task, work element, action, skill, capability, payback, and data status in a short glossary.", "proposed_owner": "Radoy", "decision_time": "Validate flow", "status": "Open"}, {"id": "Q07", "group": "Process", "question": "What is the exact site and process for the first case?", "proposed_default": "Confirm the automotive site name, empty tote types, sorting rule, source/destination, and approved SOP. Do not merge parts kitting into this PoC.", "proposed_owner": "Site owner and Diego", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q08", "group": "Process", "question": "What are the start/end points and upstream/downstream duties?", "proposed_default": "Include tote presentation, placement, container exchange, blocked routes, and confirmation when they belong to the process.", "proposed_owner": "Site engineer", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q09", "group": "Process", "question": "Which atomic process breakdown is authoritative?", "proposed_default": "Use a site-reviewed breakdown. The mentioned process image was not available in this conversation; any drafted actions must stay illustrative.", "proposed_owner": "Radoy and site engineer", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q10", "group": "Process", "question": "How much detail must an operator enter?", "proposed_default": "Start with task and action. Offer work-element and motion detail when it changes fit or timing. Do not require every hierarchy level on every form.", "proposed_owner": "Radoy and process engineer", "decision_time": "Validate flow", "status": "Open"}, {"id": "Q11", "group": "Process", "question": "Which MTM or time-study methods are valid?", "proposed_default": "Record the method and source. Support observed and standard times. Do not claim certified MTM without the required method and expertise.", "proposed_owner": "Industrial engineering", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q12", "group": "Process", "question": "Which actions overlap or require the same person/tool?", "proposed_default": "Record dependencies, shared resources, repeat counts, and parallel work. Do not sum overlapping action durations as elapsed cycle time.", "proposed_owner": "Site engineer", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q13", "group": "Process", "question": "Which handoffs, supervision, retries, and recovery duties remain with people?", "proposed_default": "Create explicit work records for each duty. Confirm their frequency and active time.", "proposed_owner": "Site owner and supplier", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q14", "group": "Process", "question": "Is the 5,000-tote example per person, team, shift, or day?", "proposed_default": "Treat all numbers in the latest request as examples until their units and time windows are confirmed.", "proposed_owner": "Radoy and site owner", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q15", "group": "Inputs", "question": "Which engineering model is available and how does it derive staff?", "proposed_default": "Map the required cells/fields manually first. Reconcile its assumptions with observed work.", "proposed_owner": "Engineering", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q16", "group": "Inputs", "question": "Which layout, scan, photo, and video files exist for the actual site?", "proposed_default": "Store the files and manually map distances and clearances. Keep automatic CAD conversion as a future adapter.", "proposed_owner": "Site engineering", "decision_time": "Before external integration", "status": "Open"}, {"id": "Q17", "group": "Inputs", "question": "Which order, SKU, inventory, and event history can the site provide?", "proposed_default": "Use a defined representative period and peak periods. Record missing coverage.", "proposed_owner": "Operations and IT", "decision_time": "Before external integration", "status": "Open"}, {"id": "Q18", "group": "Inputs", "question": "Which workforce calendar and fully loaded cost basis apply?", "proposed_default": "Use anonymous roles, shift coverage, productive hours, and current site rates. Separate annual headcount from people per shift.", "proposed_owner": "Operations and finance", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q19", "group": "Inputs", "question": "What restrictions apply to video, employee data, and cloud storage?", "proposed_default": "Record permitted sources, processing location, access, and retention. Use synthetic media in the mockup.", "proposed_owner": "Site data owner and AWS", "decision_time": "Before real data use", "status": "Open"}, {"id": "Q20", "group": "Supply", "question": "Who owns the technology library and approves each source?", "proposed_default": "DP World owns the record structure. A named owner reviews supplier claims and trial evidence.", "proposed_owner": "Rohit and procurement", "decision_time": "Before external integration", "status": "Open"}, {"id": "Q21", "group": "Supply", "question": "Which AGIBOT model, gripper, sensors, SDK, and control access are available?", "proposed_default": "Keep model and configuration unconfirmed. Do not infer a deployable stack from the vendor name.", "proposed_owner": "AWS and OEM", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q22", "group": "Supply", "question": "Which configuration combinations are supported?", "proposed_default": "Compare only compatible hardware, tools, sensors, software, and interfaces. Mark unverified combinations unknown.", "proposed_owner": "OEM and integrator", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q23", "group": "Supply", "question": "Which specification limits include operating conditions and test methods?", "proposed_default": "Capture the conditions for payload, reach, grip, speed, battery, sensing, and safety-related limits.", "proposed_owner": "OEM and engineering", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q24", "group": "Supply", "question": "Which prices and service terms can be used?", "proposed_default": "Use dated quotes with inclusions. Keep the EUR100,000 robot price as an example until confirmed.", "proposed_owner": "Procurement and finance", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q25", "group": "Supply", "question": "Which solutions require configuration, custom control work, or model training?", "proposed_default": "Ask the OEM/AWS to specify the route for each configuration. Do not assume training from scratch.", "proposed_owner": "AWS, OEM, and integrator", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q26", "group": "Performance", "question": "When can supplier data support an initial process estimate?", "proposed_default": "Permit labelled screening assumptions. Agree the evidence needed before a pilot recommendation.", "proposed_owner": "AWS and engineering", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q27", "group": "Performance", "question": "Is the first physics simulation required, and what question must it resolve?", "proposed_default": "Keep this open. Compare a supplier benchmark, a bench trial, and a physics study against the missing task evidence.", "proposed_owner": "AWS, including Emilio", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q28", "group": "Performance", "question": "When can a task result be reused at another process or site?", "proposed_default": "Define an operating envelope for object, pose, layout, tool, software, and conditions. Check differences before reuse.", "proposed_owner": "AWS and OEM", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q29", "group": "Performance", "question": "Which outputs must a simulation or benchmark provide?", "proposed_default": "Return task times and ranges, first-pass success, retries, failures, recovery, conditions, sample count, and versioned inputs.", "proposed_owner": "AWS and engineering", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q30", "group": "Performance", "question": "What trial sample and error measure are sufficient?", "proposed_default": "Define the success event and variability first. Agree the test design before setting a confidence claim.", "proposed_owner": "AWS and site engineering", "decision_time": "Before site pilot", "status": "Open"}, {"id": "Q31", "group": "Scenarios", "question": "What bounds should the search use for fleet sizes and mixed technologies?", "proposed_default": "Expose minimum/maximum counts, compatible task bundles, and shift options. Report the options actually evaluated.", "proposed_owner": "Engineering and AWS", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q32", "group": "Scenarios", "question": "Which peak, downtime, and demand-growth cases must pass?", "proposed_default": "Include agreed normal, peak, failure, and growth cases. Keep them as scenarios unless probabilities are supported.", "proposed_owner": "Operations", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q33", "group": "Scenarios", "question": "How do robots share chargers, buffers, routes, and human support?", "proposed_default": "Use an explicit schedule/resource model. A simple average availability factor is a screening limit.", "proposed_owner": "Site engineering and AWS", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q34", "group": "Scenarios", "question": "Can the tool propose layout or process changes?", "proposed_default": "Yes, as a separate option with its own time, cost, constraints, and evidence. Keep the current method visible.", "proposed_owner": "Radoy and engineering", "decision_time": "Validate flow", "status": "Open"}, {"id": "Q35", "group": "Economics", "question": "What part of freed time can create cash savings or avoided hires?", "proposed_default": "Require a shift/staffing plan. Show redeployed capacity separately. Do not multiply task-count coverage by salary.", "proposed_owner": "Operations and finance", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q36", "group": "Economics", "question": "Does EUR75,000 mean annual fully loaded cost per person?", "proposed_default": "Keep it as a user example. Confirm currency, benefits, overtime, agency cost, paid hours, and effective date.", "proposed_owner": "Finance", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q37", "group": "Economics", "question": "Which purchase, lease, or RaaS offers should be compared?", "proposed_default": "Model upfront and recurring costs by line item. Prevent duplicate service and maintenance costs.", "proposed_owner": "Procurement and finance", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q38", "group": "Economics", "question": "Who pays the costs and who retains the benefit under the site contract?", "proposed_default": "Show DP World and customer views where needed. Allocate recovery cost separately from the share of labour benefit retained.", "proposed_owner": "Finance and commercial owner", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q39", "group": "Economics", "question": "What contract term, ramp-up, horizon, and exit costs apply?", "proposed_default": "Use an agreed finite cash-flow period. Test contract end, redeployment, and residual value explicitly.", "proposed_owner": "Commercial owner and finance", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q40", "group": "Economics", "question": "Which payback limit, discount rate, FX date, and financial definitions apply?", "proposed_default": "Call a two-year recovery of investment payback. Define ROI separately. Leave rates unknown until agreed.", "proposed_owner": "Finance and Rohit", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q41", "group": "Economics", "question": "Which quality, capacity, safety, or service gains can be monetised?", "proposed_default": "Show the metric first. Add money only with an agreed method and no double counting. Separate robot value from added platform value.", "proposed_owner": "Operations and finance", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q42", "group": "Confidence", "question": "What event would a confidence percentage describe?", "proposed_default": "Define task success, process SLA success, and positive business case as separate questions with stated conditions and time windows.", "proposed_owner": "Radoy, Rohit, and AWS", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q43", "group": "Confidence", "question": "Can the evidence support a probability, or only a quality rating?", "proposed_default": "Show evidence status and scenario ranges first. Leave probability unavailable until the method is supported and checked.", "proposed_owner": "AWS and analytics", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q44", "group": "Confidence", "question": "How should evidence age, missing conditions, and site differences affect the result?", "proposed_default": "Show specific gaps and transfer limits. Do not hide them inside a weighted score.", "proposed_owner": "Engineering and AWS", "decision_time": "Before local calculations", "status": "Open"}, {"id": "Q45", "group": "Confidence", "question": "What evidence permits advance to a benchmark, pilot, or scale-up?", "proposed_default": "Agree a separate evidence requirement for each decision. A strong financial case alone does not prove readiness.", "proposed_owner": "Rohit, site owner, and AWS", "decision_time": "Before site pilot", "status": "Open"}, {"id": "Q46", "group": "Deployment", "question": "Who is the accountable integrator from recommendation to site operation?", "proposed_default": "Name one owner for the full delivery path. Split supplier/AWS/DP World duties in the plan.", "proposed_owner": "Rohit and AWS", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q47", "group": "Deployment", "question": "What model/policy or OEM software will run on the humanoid?", "proposed_default": "Ask AWS/OEM to name the supported stack, access, rights, hardware limits, and fallback route.", "proposed_owner": "AWS and OEM", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q48", "group": "Deployment", "question": "Which datasets, labels, simulation assets, and training runs are required?", "proposed_default": "Define them only after choosing the execution route. Link each item to a task, failure case, and test.", "proposed_owner": "AWS and OEM", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q49", "group": "Deployment", "question": "What must pass before loading hardware and starting a site pilot?", "proposed_default": "Specify bench tests, interface tests, operating limits, site readiness, safe stop/recovery, and the accountable site decision.", "proposed_owner": "Site owner, OEM, and integrator", "decision_time": "Before site pilot", "status": "Open"}, {"id": "Q50", "group": "Deployment", "question": "Who packages, loads, checks, monitors, and rolls back a release?", "proposed_default": "Assign these duties explicitly. Preserve the previous release and its compatible configuration.", "proposed_owner": "AWS, OEM, and integrator", "decision_time": "Before site pilot", "status": "Open"}, {"id": "Q51", "group": "Deployment", "question": "What pilot duration, stop rules, and acceptance measures apply?", "proposed_default": "Agree output, quality, intervention, downtime, human work, cost, and safety-related stop conditions before the trial.", "proposed_owner": "Site owner and Rohit", "decision_time": "Before site pilot", "status": "Open"}, {"id": "Q52", "group": "Deployment", "question": "Which WMS/WES/PLC/fleet interfaces are required?", "proposed_default": "Define dispatch, acknowledgement, exception, ownership, retry, and event contracts. Keep the platform separate from real-time machine control.", "proposed_owner": "IT, integrator, and OEM", "decision_time": "Before external integration", "status": "Open"}, {"id": "Q53", "group": "Operations", "question": "What counts as a deployed asset and where is its status authoritative?", "proposed_default": "Separate planned, in pilot, in service, paused, and retired. Record site, process, serial/configuration, and release.", "proposed_owner": "Operations and IT", "decision_time": "Before external integration", "status": "Open"}, {"id": "Q54", "group": "Operations", "question": "Which telemetry and actual cost data will be available?", "proposed_default": "Start with manual/CSV input. Define denominators, timestamps, and downtime reasons before connecting live feeds.", "proposed_owner": "Operations and OEM", "decision_time": "Before external integration", "status": "Open"}, {"id": "Q55", "group": "Operations", "question": "How will field data change task evidence and future recommendations?", "proposed_default": "Review new evidence, record its operating envelope, update versions, and mark affected results out of date.", "proposed_owner": "Engineering and AWS", "decision_time": "AWS technical definition", "status": "Open"}, {"id": "Q56", "group": "Operations", "question": "When can a pilot scale to more robots or another site?", "proposed_default": "Use observed performance and a fresh local gap check. Do not copy a site approval automatically.", "proposed_owner": "Site owner and Rohit", "decision_time": "Before scale-up", "status": "Open"}, {"id": "Q57", "group": "Mockup and data", "question": "Where must version 2 store cases?", "proposed_default": "Use local persistence plus complete validated export/import first. Add a shared backend only if collaboration needs it.", "proposed_owner": "Radoy", "decision_time": "Before rebuild", "status": "Open"}, {"id": "Q58", "group": "Mockup and data", "question": "Which roles need different views or edit rights?", "proposed_default": "Show Executive, Engineer, Site, and Delivery views as demo roles. Treat real login and shared access as a separate implementation choice.", "proposed_owner": "Radoy and Rohit", "decision_time": "Before rebuild", "status": "Open"}, {"id": "Q59", "group": "Mockup and data", "question": "Which integrations must be working in the mockup?", "proposed_default": "Implement local records, rules, scenario maths, reports, and observed-data entry. Show CAD, physics, training, and hardware transfer as explicit placeholders.", "proposed_owner": "Radoy", "decision_time": "Validate flow", "status": "Open"}];
+
+
+/* app.js */
+
+
+
+
+
+
+const appRoot = document.getElementById('app');
+const ui = { view: 'executive', tab: 'Overview', mobileMenu: false, search: '', stageFilter: '', siteFilter: '', questionGroup: '', questionSearch: '', role: 'Engineer view', saveStatus: 'Opening local records…' };
+let suppressRender = false, modalSubmit = null, fleetResults = [], pendingImport = null, toastTimer;
+let browserStorage = null; try { browserStorage = window.localStorage; } catch {}
+const store = createStore({ storage: browserStorage, fetcher: location.protocol === 'file:' ? null : window.fetch.bind(window), onStatus: (message,status) => { ui.saveStatus=message; const label=document.getElementById('save-status'); if(label){label.textContent=message;label.dataset.status=status;} } });
+const hx = htmlEscape;
+const ctx = () => ({...ui,isMobile:window.matchMedia('(max-width:700px)').matches,w:store.get(),c:store.current(),questions:QUESTION_REGISTER});
+const activeScenario = () => { const c=store.current();return c.scenarios.find(s=>s.id===c.selectedScenarioId)||c.scenarios[0]; };
+function notify(message,kind='') { const toast=document.getElementById('toast'); if(!toast)return;toast.textContent=message;toast.className=`toast visible ${kind}`;clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.className='toast',5000); }
+function render() { if(suppressRender)return;appRoot.innerHTML=renderApp(ctx());document.title=`${ui.view==='case'?store.current().name:'Hybrid Workforce'} · Version 2`; }
+store.subscribe(render);
+function updateCase(fn,material=true,quiet=false) { suppressRender=quiet;try{store.updateCase(store.current().id,fn,material);}finally{suppressRender=false;} }
+function setPath(record,path,value) { const parts=path.split('.');if(parts.some(p=>['__proto__','constructor','prototype'].includes(p)))throw new Error('Unsupported field.');let node=record;for(const part of parts.slice(0,-1))node=node[part];node[parts.at(-1)]=value; }
+function readForm(form) { const result={};for(const [key,value] of new FormData(form)){const input=form.elements.namedItem(key);result[key]=input?.type==='number'?(value===''?null:Number(value)):String(value).trim();}return result; }
+function closeDialog(){document.getElementById('app-dialog')?.close();modalSubmit=null;}
+function openDialog(title,body,onSubmit=null,{submit='Save',wide=false,footer=''}={}) {
+  const dialog=document.getElementById('app-dialog');
+  dialog.className=wide?'wide-dialog':'';
+  dialog.innerHTML=`<div class="dialog-head"><div><span class="eyebrow">HYBRID WORKFORCE / LOCAL RECORD</span><h2 id="dialog-title">${hx(title)}</h2></div><button type="button" class="icon-button" data-action="close-dialog" aria-label="Close dialog">${icon('close')}</button></div><form id="modal-form"><div class="dialog-body">${body}<p id="modal-error" class="form-error" role="alert"></p></div><div class="dialog-footer">${footer}<button type="button" class="button secondary" data-action="close-dialog">${onSubmit?'Cancel':'Close'}</button>${onSubmit?`<button class="button primary" type="submit">${hx(submit)}</button>`:''}</div></form>`;
+  modalSubmit=onSubmit;dialog.showModal();dialog.querySelector('input,select,textarea')?.focus();
+}
+const formInput = (name,label,value,options={})=>inputField(name,label,value,{...options,prefix:'modal'});
+const formSelect = (name,label,value,options,help='')=>selectField(name,label,value,options,{prefix:'modal',help});
+const formNote = (name,label,value='',help='')=>`<div class="field wide"><label for="modal-${name}">${hx(label)}</label><textarea id="modal-${name}" name="${hx(name)}" rows="3">${hx(value)}</textarea>${help?`<small>${hx(help)}</small>`:''}</div>`;
+function downloadFile(name,content,type='application/json') { const url=URL.createObjectURL(new Blob([content],{type}));const link=document.createElement('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),5000); }
+const jsonDownload=(name,value)=>downloadFile(name,JSON.stringify(value,null,2));
+function materialHistory(c,event) { c.history.push({event,date:new Date().toISOString(),revision:c.revision,decision:copy(c.decision||null)}); }
+function cleanScenarioCounts(c) { for(const s of c.scenarios){ const used=new Set(Object.values(s.assignments));for(const id of Object.keys(s.counts))if(!used.has(id))delete s.counts[id];for(const id of used)if(id!=='human'&&s.counts[id]==null)s.counts[id]=1; } }
+
+function newCaseDialog() {
+  openDialog('New evaluation',gridFields([formInput('name','Process name','',{type:'text',required:true}),formInput('site','Site','',{type:'text',required:true}),formInput('country','Country','Germany',{type:'text',required:true}),formInput('owner','Case owner','Process engineering',{type:'text',required:true}),formSelect('template','Starting point','tote',[['tote','Tote example · sample actions'],['blank','Blank action list']])])+formNote('purpose','Decision to support','Find the best useful split of work between people and technology.'),v=>{
+    const c=makeCase(v.name);c.site=v.site;c.country=v.country;c.owner=v.owner;c.purpose=v.purpose;c.stage='Define';
+    if(v.template==='blank'){c.actions=[];c.sample=false;c.scenarios=c.scenarios.slice(0,1);c.selectedScenarioId='current';c.sources.forEach(s=>{s.status=s.status==='Unknown'?'Unknown':'Assumed';s.note='Add the source for this new case. Default numeric fields are planning assumptions.';});}
+    store.addCase(c);ui.view='case';ui.tab=v.template==='blank'?'Process':'Overview';render();notify('Evaluation created. Review the default assumptions.');
+  },{submit:'Create evaluation'});
+}
+function editCaseDialog() {
+  const c=store.current();openDialog('Case details',gridFields([formInput('name','Process name',c.name,{type:'text',required:true}),formInput('site','Site',c.site,{type:'text',required:true}),formInput('country','Country',c.country,{type:'text',required:true}),formInput('owner','Owner',c.owner,{type:'text',required:true}),formSelect('stage','Pipeline stage',c.stage,STAGES),formSelect('sample','Case data label',c.sample?'sample':'user',[['sample','Sample inputs'],['user','User inputs · check the source status']])])+formNote('purpose','Decision to support',c.purpose),v=>{v.sample=v.sample==='sample';updateCase(c=>Object.assign(c,v));notify('Case details saved.');});
+}
+function actionDialog(id=null) {
+  const c=store.current(),a=c.actions.find(a=>a.id===id)||{id:uid('action'),name:'',skill:'inspect',seconds:null,frequency:1,payloadKg:null,reachM:null,aisleM:null,source:'Assumed',sourceId:'',dependency:c.actions.at(-1)?.id||'',note:'',recovery:'',parallel:false};
+  openDialog(id?'Edit action':'Add action',gridFields([formInput('name','Action name',a.name,{type:'text',required:true}),formInput('taskGroup','Task group',a.taskGroup||'',{type:'text'}),formInput('workElement','Work element',a.workElement||a.name,{type:'text'}),formInput('object','Object / load',a.object||'',{type:'text'}),formInput('from','Source location',a.from||'',{type:'text'}),formInput('to','Target location',a.to||'',{type:'text'}),formSelect('timingMethod','Timing method',a.timingMethod||'Not known',['Not known','Assumed example','Observed time study','Standard time study','MTM · user-supplied']),formInput('mtmCode','MTM / study code',a.mtmCode||'',{type:'text',help:'Optional. The app does not certify an MTM study.'}),formInput('sampleCount','Timing sample count',a.sampleCount,{step:1}),formInput('skill','Required skill',a.skill,{type:'text',help:'Use a known skill such as grip, or add a specific skill. Add its measured or assumed time to the configuration record.'}),formInput('seconds','Human active time',a.seconds,{unit:'s/action'}),formInput('frequency','Repeat count per unit',a.frequency,{unit:'×'}),formInput('payloadKg','Load requirement',a.payloadKg,{unit:'kg'}),formInput('reachM','Reach requirement',a.reachM,{unit:'m'}),formInput('aisleM','Available aisle',a.aisleM,{unit:'m'}),formSelect('source','Data status',a.source,SOURCE_STATES),formSelect('sourceId','Source record',a.sourceId,[['','Not linked'],...c.sources.map(s=>[s.id,s.name])]),formSelect('dependency','Preceding dependency',a.dependency,[['','Start / no predecessor'],...c.actions.filter(x=>x.id!==a.id).map(x=>[x.id,x.name])]),formSelect('parallel','Can this work overlap?',a.parallel?'yes':'no',[['no','No · sequential planning model'],['yes','Yes · needs a shared-resource model']])])+formNote('note','Method and conditions',a.note)+formNote('recovery','Failure, recovery, and responsible role',a.recovery),v=>{
+    v.skill=v.skill.toLowerCase().replace(/\s+/g,'-');const next={...a,...v,parallel:v.parallel==='yes'};
+    const draft=copy(c);if(id)draft.actions[draft.actions.findIndex(x=>x.id===id)]=next;else draft.actions.push(next);
+    const deps=new Map(draft.actions.map(x=>[x.id,x.dependency]));let curr=next.dependency,seen=new Set([next.id]);while(curr){if(seen.has(curr))throw new Error('This dependency creates a cycle.');seen.add(curr);curr=deps.get(curr);}
+    updateCase(c=>{materialHistory(c,'Action edited');c.actions=draft.actions;});notify('Action saved. Review affected matches and results.');
+  },{footer:id?button('Remove action','remove-action',{id,kind:'danger',extra:'type="button"'}):'',wide:true});
+}
+function configDialog(id=null) {
+  const v=store.get().configs.find(v=>v.id===id)||{...copy(seedConfigs()[0]),id:uid('config'),name:'New configuration',family:'Humanoid',source:'Unknown',skills:[],times:{},price:null,payloadKg:null,reachM:null};
+  openDialog(id?'Configuration and capability record':'Add configuration',`<div class="callout subtle"><p>Values are valid only for their stated configuration and conditions. A measured label needs a real source and applicable test evidence.</p></div>`+gridFields([
+    formInput('name','Configuration name',v.name,{type:'text',required:true}),formInput('hardwareModel','Hardware model / version',v.hardwareModel||'Not confirmed',{type:'text'}),formInput('tool','Tool / gripper',v.tool||'Not confirmed',{type:'text'}),formInput('sensors','Sensors',v.sensors||'Not confirmed',{type:'text'}),formInput('software','Software / policy / model',v.software||'Not confirmed',{type:'text'}),formInput('interface','Supported interface',v.interface||'Not verified',{type:'text'}),formInput('quoteValidUntil','Quote valid until',v.quoteValidUntil||'',{type:'date'}),formSelect('family','Technology family',v.family,['Humanoid','AMR','Robot arm','Vision','Assist tool','Fixed automation','Other']),formSelect('source','Evidence status',v.source,SOURCE_STATES),formInput('sourceDate','Source date',v.sourceDate,{type:'date'}),formInput('payloadKg','Maximum payload',v.payloadKg,{unit:'kg'}),formInput('reachM','Maximum reach',v.reachM,{unit:'m'}),formInput('minAisleM','Minimum aisle',v.minAisleM,{unit:'m'}),formInput('successPct','First-pass bundle success',v.successPct,{unit:'%',max:100}),formInput('interventionPct','Extra human intervention events',v.interventionPct,{unit:'% of units',max:100}),formInput('recoverySec','Human time per intervention',v.recoverySec,{unit:'s'}),formInput('chargePct','Charging share of operating window',v.chargePct,{unit:'%',max:99,help:'Exclude this time from downtime.'}),formInput('downtimePct','Other downtime',v.downtimePct,{unit:'%',max:99,help:'Excludes charging. Use the same operating window.'}),formInput('price','Purchase price per unit',v.price,{unit:'EUR once'}),formInput('leaseMonthly','Lease / RaaS fee per unit',v.leaseMonthly,{unit:'EUR/month'}),formInput('supportAnnual','Service cost when not included',v.supportAnnual,{unit:'EUR/unit/year'}),formInput('energyAnnual','Energy cost',v.energyAnnual,{unit:'EUR/unit/year'}),formSelect('serviceIncluded','Lease / RaaS includes service?',v.serviceIncluded?'yes':'no',[['yes','Yes'],['no','No']]),formSelect('requiresOperator','Needs a person for active tool time?',v.requiresOperator?'yes':'no',[['no','No'],['yes','Yes · assist tool']])
+  ])+formNote('description','Configuration, tool, software, and operating conditions',v.description)+formNote('sourceNote','Source, test method, samples, and validity limits',v.sourceNote)+`<h3>Task times and supported skills</h3><p class="muted">Enter a positive time to include a skill. Leave it blank when performance is not known. Task times do not include retries.</p>`+gridFields(SKILLS.map(skill=>formInput(`time_${skill}`,`${skill} time`,v.times[skill],{unit:'s/action',min:0.001})))+formNote('customTimes','Additional skills and task times',Object.entries(v.times).filter(([key])=>!SKILLS.includes(key)).map(([key,value])=>key+': '+value).join('\n'),'One skill: seconds pair per line. Example: push-button: 2.5.'),values=>{
+    if(values.chargePct!=null&&values.downtimePct!=null&&values.chargePct+values.downtimePct>=100)throw new Error('Charge and downtime must total less than 100%.');
+    const times=parseTaskTimes(values.customTimes||'');delete values.customTimes;for(const skill of SKILLS){if(values[`time_${skill}`]!=null)times[skill]=values[`time_${skill}`];delete values[`time_${skill}`];}
+    const skills=Object.keys(times);const next={...v,...values,times,skills,serviceIncluded:values.serviceIncluded==='yes',requiresOperator:values.requiresOperator==='yes'};
+    // Retain the declared skill for an unknown record even when the time is not yet available.
+    if(!skills.length&&v.skills.length)next.skills=v.skills;
+    if(id)store.updateConfig(id,x=>Object.assign(x,next));else{store.get().configs.push(next);store.save();}
+    notify('Configuration saved. Material changes require a new review.');
+  },{wide:true});
+}
+function sourceDialog(id=null) {
+  const s=store.current().sources.find(s=>s.id===id)||{id:uid('source'),name:'',type:'Process / SOP',status:'Unknown',date:'',note:'',fileId:null};
+  openDialog(id?'Review source':'Add source',gridFields([formInput('name','Source name',s.name,{type:'text',required:true}),formSelect('type','Source type',s.type,['Process / SOP','Engineering model','Layout / CAD','MTM / time study','Demand / orders','Benchmark / trial','Commercial quote','Other']),formSelect('status','Data status',s.status,SOURCE_STATES),formInput('date','Source / capture date',s.date,{type:'date'})])+formNote('note','Source, conditions, method, samples, and missing data',s.note),values=>{updateCase(c=>{if(id)Object.assign(c.sources.find(x=>x.id===id),values);else c.sources.push({...s,...values});});notify('Source saved.');});
+}
+function decisionDialog() {
+  const c=store.current(),s=activeScenario(),r=evaluateScenario(c,s,store.get().configs);
+  openDialog('Record the next decision',`<p>Selected option: <strong>${hx(s.name)}</strong>. ${r.status==='candidate'?'This planning result can advance to an evidence study.':'The selected option has no supported positive planning case.'}</p>`+gridFields([formSelect('outcome','Decision','Proceed to evidence study',['Proceed to evidence study','Collect more data','Change the process','Defer','Stop']),formInput('owner','Accountable owner',c.owner,{type:'text',required:true})])+formNote('reason','Reason, conditions, and next evidence step',''),v=>{
+    if(v.reason.length<12)throw new Error('Add a clear reason and the next step.');
+    if(v.outcome==='Proceed to evidence study'&&r.status!=='candidate')throw new Error('Select a feasible positive case, or record a different decision.');
+    updateCase(c=>{materialHistory(c,'Planning decision recorded');c.decision={...v,revision:c.revision,scenarioId:s.id,recordedAt:new Date().toISOString(),result:copy(r)};c.stage='Decide';},false);notify('Planning decision recorded. This does not authorize a site pilot.');
+  },{submit:'Record decision'});
+}
+function testDialog() {
+  openDialog('Add test record',gridFields([formInput('name','Test and conditions','',{type:'text',required:true}),formSelect('status','Result','Planned',['Planned','Pass','Fail','Blocked']),formInput('source','Evidence source','',{type:'text',required:true}),formInput('date','Test date',new Date().toISOString().slice(0,10),{type:'date',required:true})])+formNote('note','Method, samples, failures, and remaining limits',''),v=>{if(v.note.length<8)throw new Error('Describe the test evidence and its limits.');updateCase(c=>c.deployment.testResults.push({...v,id:uid('test'),revision:c.revision}),false);notify('Test record saved for the current case version.');});
+}
+function assetDialog(id=null,caseId=null) {
+  const c=store.get().cases.find(c=>c.id===caseId)||store.current(),a=c.deployment.assets.find(a=>a.id===id)||{id:uid('asset'),name:'',configId:store.get().configs[0].id,status:'Planned',serial:'Not assigned',release:c.deployment.release,note:''};
+  openDialog(id?'Asset record':'Plan an asset',gridFields([formSelect('caseId','Case',c.id,store.get().cases.map(c=>[c.id,`${c.name} · ${c.site}`])),formInput('name','Asset name',a.name,{type:'text',required:true}),formSelect('configId','Configuration',a.configId,store.get().configs.map(v=>[v.id,v.name])),formSelect('status','Recorded status',a.status,['Planned','In pilot','In service','Paused','Retired']),formInput('serial','Serial / physical identity',a.serial,{type:'text'}),formInput('release','Supported release',a.release,{type:'text'})])+formNote('note','Source, operating limits, and support notes',a.note),v=>{
+    const target=store.get().cases.find(c=>c.id===v.caseId);if(!target)throw new Error('Choose a case.');delete v.caseId;
+    if(id&&c.id!==target.id)store.updateCase(c.id,x=>x.deployment.assets=x.deployment.assets.filter(x=>x.id!==id),false);
+    store.updateCase(target.id,x=>{const old=x.deployment.assets.find(x=>x.id===id);if(old)Object.assign(old,v);else x.deployment.assets.push({...a,...v});},false);notify('Asset record saved. No hardware connection was made.');
   });
 }
-
-function drawCostChart() {
-  const data = [
-    { label: "Labor avoided", value: model.annualLaborAvoided },
-    { label: "Robot cost", value: model.annualRobotCost },
-    { label: "Platform", value: model.annualCloudCost },
-    { label: "Maintenance", value: model.annualMaintenanceReserve },
-    { label: "Net savings", value: model.netAnnualSavings }
-  ];
-  drawSingleBarChart(document.getElementById("costChart"), data);
+function observationDialog() {
+  openDialog('Record a process observation',gridFields([
+    formInput('date','Observation date',new Date().toISOString().slice(0,10),{type:'date',required:true}),formSelect('status','Data status','Sample',['Sample','Measured']),formInput('source','Source / trial record','',{type:'text',required:true}),formInput('hours','Elapsed observation window',1,{unit:'h',min:0.001,required:true}),formInput('units','Completed units',0,{step:1,required:true}),formInput('rejects','Rejected units',0,{step:1,required:true}),formInput('interventions','Human intervention events',0,{step:1,required:true}),formInput('humanHours','Total human active work',0,{unit:'person-hours',required:true}),formInput('downtimeHours','Other downtime',0,{unit:'h',required:true}),formInput('chargeHours','Charging time',0,{unit:'h',required:true}),formInput('cost','Cost for this observation window',0,{unit:'EUR',required:true}),formInput('baselineCost','Comparable baseline cost',null,{unit:'EUR',help:'Optional. Use the same output, time window, and cost scope. No annual savings are inferred.'})
+  ])+formNote('note','Demand, configuration, conditions, and limits',''),v=>{const errors=validateObservation(v);if(errors.length)throw new Error(errors[0]);updateCase(c=>c.observations.push({...v,id:uid('observation'),revision:c.revision,scenarioId:c.selectedScenarioId}),false);notify('Observation recorded. Review conditions before updating model inputs.');},{wide:true});
+}
+function issueDialog(id=null,fromObservation=null) {
+  const i=store.current().issues.find(i=>i.id===id)||{id:uid('issue'),title:fromObservation?'Review the observation gap':'',owner:store.current().owner,status:'Open',note:fromObservation?`Observation ${fromObservation}: compare demand, good output, human work, interventions, and cost.`:'',date:new Date().toISOString().slice(0,10)};
+  openDialog(id?'Review issue':'Add improvement issue',gridFields([formInput('title','Issue / change',i.title,{type:'text',required:true}),formInput('owner','Responsible owner',i.owner,{type:'text',required:true}),formSelect('status','Status',i.status,['Open','In progress','Ready for test','Closed'])])+formNote('note','Evidence and next action',i.note),v=>{updateCase(c=>{if(id)Object.assign(c.issues.find(x=>x.id===id),v);else c.issues.push({...i,...v});},false);notify('Improvement record saved.');});
 }
 
-function drawOemScoreChart() {
-  const canvas = document.getElementById("oemScoreChart");
-  if (!canvas) return;
-  const top = model.selected.robot;
-  const data = Object.entries(top.capabilities).map(([key, value]) => ({ label: CAPABILITY_LABELS[key] || key, value }));
-  drawHorizontalScoreChart(canvas, data, top.name);
+function fleetSearchDialog() {
+  const c=store.current();fleetResults=searchFleet(c,activeScenario(),store.get().configs,6);
+  openDialog('Compare fleet counts',`<div class="callout subtle"><p>${fleetResults.length} combinations evaluated. Bounds: 1–6 units per assigned configuration, up to 3 configurations. This is a bounded planning search, not a global optimum.</p></div>`+table(['Combination','Status','Peak capacity','People / shift','Annual net','Payback',''],fleetResults.map((x,i)=>row([hx(x.scenario.name),chip(x.result.status,x.result.status==='candidate'?'green':'amber'),`${number(x.result.capacity)} /h`,number(x.result.peoplePerShift),euro(x.result.valid?x.result.annualNet:null),x.result.payback==null?'—':`${number(x.result.payback)} years`,button('Use option','use-search',{id:String(i),extra:'type="button"'})]))),null,{wide:true});
 }
 
-function drawGroupedBarChart(canvas, data, options) {
-  const ctx = setupCanvas(canvas);
-  const { width, height } = canvasMetrics(canvas);
-  ctx.clearRect(0, 0, width, height);
-  const padding = { top: 48, right: 165, bottom: 70, left: 62 };
-  const plotW = width - padding.left - padding.right;
-  const plotH = height - padding.top - padding.bottom;
-  const max = Math.max(...data.flatMap(item => options.series.map(key => Math.abs(item[key])))) * 1.2 || 1;
-  drawChartTitle(ctx, "Manual vs hybrid-assisted KPIs", padding.left, 24);
-  drawLegendRight(ctx, [
-    { label: options.labels.manual, color: options.colors.manual },
-    { label: options.labels.robot, color: options.colors.robot }
-  ], width - padding.right + 26, padding.top + 18);
-  drawAxis(ctx, padding, width, height);
-
-  const groupW = plotW / data.length;
-  const barW = Math.min(32, groupW / 4.2);
-  data.forEach((item, i) => {
-    const x0 = padding.left + i * groupW + groupW / 2;
-    options.series.forEach((series, j) => {
-      const value = item[series];
-      const barH = Math.abs(value) / max * plotH;
-      const x = x0 + (j === 0 ? -barW - 4 : 4);
-      const y = padding.top + plotH - barH;
-      const gradient = ctx.createLinearGradient(x, y, x, y + barH);
-      gradient.addColorStop(0, options.colors[series]);
-      gradient.addColorStop(1, series === "manual" ? "#82a1ff" : "#ff93b8");
-      ctx.fillStyle = gradient;
-      roundRect(ctx, x, y, barW, barH, 8);
-      ctx.fill();
-      ctx.fillStyle = "#1b2640";
-      ctx.font = "800 10px Inter, Segoe UI, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(shortValue(value), x + barW / 2, y - 7);
-    });
-    ctx.fillStyle = "#647089";
-    ctx.font = "800 11px Inter, Segoe UI, sans-serif";
-    ctx.textAlign = "center";
-    wrapCanvasText(ctx, item.label, x0, height - 42, groupW - 10, 13);
-    ctx.fillStyle = "#94a3b8";
-    ctx.font = "700 10px Inter, Segoe UI, sans-serif";
-    ctx.fillText(item.unit, x0, height - 13);
-  });
+function previewActions(actions) {
+  pendingImport={kind:'actions',actions};
+  openDialog('Review the imported actions',`<p>This replaces the current action list. Old scenario assignments and decisions will be cleared. A process snapshot is kept in the case history.</p>`+table(['Action','Skill','Human seconds','Source'],actions.map(a=>row([hx(a.name),hx(a.skill),number(a.seconds),chip(a.source)])))+`<p class="muted">Missing time and requirements stay unknown. Review all imported fields before evaluation.</p>`,()=>{const next=copy(pendingImport.actions);updateCase(c=>{c.history.push({event:'Before process import',date:new Date().toISOString(),revision:c.revision,actions:copy(c.actions),scenarios:copy(c.scenarios)});c.actions=next;c.scenarios.forEach(s=>{s.assignments={};s.counts={};});c.decision=null;});pendingImport=null;ui.view='case';ui.tab='Process';render();notify('Action list imported. Complete unknown fields in the process editor.');},{submit:'Replace action list',wide:true});
+}
+function pasteActionsDialog(){openDialog('Paste an action list',formSelect('format','Format','txt',[['txt','One action per line'],['csv','CSV with named columns'],['json','JSON action array']])+formNote('text','Process actions','','CSV columns: name, skill, seconds, frequency, payloadKg, reachM, aisleM, note. Plain text creates a draft with unknown times.'),v=>{const actions=parseActions(v.text,v.format);queueMicrotask(()=>previewActions(actions));},{submit:'Review actions',wide:true});}
+function workspaceImportPreview(value) {
+  const errors=validateWorkspace(value);if(errors.length)throw new Error(errors[0]);pendingImport={kind:'workspace',workspace:value};
+  openDialog('Review workspace import',`<p>This replaces the workspace in this browser and local database. Download a backup first if you need the current cases.</p><div class="metrics small-metrics"><div><strong>${value.cases.length}</strong><span>cases</span></div><div><strong>${value.configs.length}</strong><span>configurations</span></div></div><ul>${value.cases.map(c=>`<li>${hx(c.name)} · ${hx(c.site)} · v${c.revision}</li>`).join('')}</ul>`,()=>{const previous=JSON.stringify(store.get());const next=pendingImport.workspace;try{localStorage.setItem('hybrid-workforce-v2-before-import',previous);}catch{}const imported=copy(next);for(const c of imported.cases){c.history.push({event:'Workspace imported; reviews require confirmation',date:new Date().toISOString(),revision:c.revision});c.revision++;c.deployment.review=null;}store.replace(imported);pendingImport=null;ui.view='evaluations';render();notify('Workspace imported. Previous reviews need confirmation. A browser backup was kept.');},{submit:'Import workspace',footer:button('Download current backup','export-workspace',{extra:'type="button"'})});
 }
 
-function drawSingleBarChart(canvas, data) {
-  const ctx = setupCanvas(canvas);
-  const { width, height } = canvasMetrics(canvas);
-  ctx.clearRect(0, 0, width, height);
-  const padding = { top: 48, right: 34, bottom: 70, left: 76 };
-  const plotW = width - padding.left - padding.right;
-  const plotH = height - padding.top - padding.bottom;
-  const maxAbs = Math.max(...data.map(item => Math.abs(item.value))) * 1.2 || 1;
-  const zeroY = padding.top + plotH * 0.72;
-  drawChartTitle(ctx, "Annual financial profile", padding.left, 24);
-  drawAxis(ctx, padding, width, height, zeroY);
-
-  const groupW = plotW / data.length;
-  const barW = Math.min(58, groupW * 0.48);
-  data.forEach((item, i) => {
-    const x = padding.left + i * groupW + (groupW - barW) / 2;
-    const value = item.value;
-    const barH = Math.abs(value) / maxAbs * plotH * 0.75;
-    const y = value >= 0 ? zeroY - barH : zeroY;
-    const gradient = ctx.createLinearGradient(x, y, x + barW, y + barH);
-    if (value >= 0) {
-      gradient.addColorStop(0, "#23c487");
-      gradient.addColorStop(1, item.label.includes("Net") ? "#2bc2ff" : "#3c6df0");
-    } else {
-      gradient.addColorStop(0, "#ff8a3d");
-      gradient.addColorStop(1, "#ef2f73");
-    }
-    ctx.fillStyle = gradient;
-    roundRect(ctx, x, y, barW, barH, 9);
-    ctx.fill();
-    ctx.fillStyle = "#1b2640";
-    ctx.font = "900 11px Inter, Segoe UI, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(formatCurrency(value), x + barW / 2, value >= 0 ? y - 8 : y + barH + 15);
-    ctx.fillStyle = "#647089";
-    ctx.font = "800 11px Inter, Segoe UI, sans-serif";
-    wrapCanvasText(ctx, item.label, x + barW / 2, height - 43, groupW - 8, 13);
-  });
-}
-
-function drawHorizontalScoreChart(canvas, data, title) {
-  const ctx = setupCanvas(canvas);
-  const { width, height } = canvasMetrics(canvas);
-  ctx.clearRect(0, 0, width, height);
-  const padding = { top: 50, right: 30, bottom: 24, left: 178 };
-  const rowH = (height - padding.top - padding.bottom) / data.length;
-  drawChartTitle(ctx, title, 22, 24);
-  data.forEach((item, i) => {
-    const y = padding.top + i * rowH + rowH * 0.22;
-    const barH = Math.max(8, rowH * 0.42);
-    const barW = (width - padding.left - padding.right) * (item.value / 100);
-    ctx.fillStyle = "#647089";
-    ctx.font = "800 11px Inter, Segoe UI, sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(item.label, padding.left - 12, y + barH * 0.76);
-    ctx.fillStyle = "#e7edf5";
-    roundRect(ctx, padding.left, y, width - padding.left - padding.right, barH, 999);
-    ctx.fill();
-    const gradient = ctx.createLinearGradient(padding.left, y, padding.left + barW, y);
-    gradient.addColorStop(0, "#23c487");
-    gradient.addColorStop(0.55, "#2bc2ff");
-    gradient.addColorStop(1, "#ef2f73");
-    ctx.fillStyle = gradient;
-    roundRect(ctx, padding.left, y, barW, barH, 999);
-    ctx.fill();
-    ctx.fillStyle = "#1b2640";
-    ctx.textAlign = "left";
-    ctx.font = "900 11px Inter, Segoe UI, sans-serif";
-    ctx.fillText(item.value.toFixed(0), padding.left + barW + 7, y + barH * 0.76);
-  });
-}
-
-function setupCanvas(canvas) {
-  const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-  const rect = canvas.getBoundingClientRect();
-  const width = Math.max(360, Math.floor(rect.width));
-  const height = Math.max(260, Number(canvas.getAttribute("height")) || Math.floor(rect.height));
-  canvas.width = Math.floor(width * dpr);
-  canvas.height = Math.floor(height * dpr);
-  canvas.style.height = `${height}px`;
-  const ctx = canvas.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  canvas.dataset.metricWidth = width;
-  canvas.dataset.metricHeight = height;
-  return ctx;
-}
-
-function canvasMetrics(canvas) {
-  return { width: Number(canvas.dataset.metricWidth), height: Number(canvas.dataset.metricHeight) };
-}
-
-function drawChartTitle(ctx, title, x, y) {
-  ctx.fillStyle = "#0b1020";
-  ctx.font = "900 14px Inter, Segoe UI, sans-serif";
-  ctx.textAlign = "left";
-  ctx.fillText(title, x, y);
-}
-
-function drawLegendRight(ctx, items, x, y) {
-  ctx.fillStyle = "rgba(248,251,255,0.94)";
-  ctx.strokeStyle = "rgba(28,38,66,0.1)";
-  roundRect(ctx, x - 14, y - 18, 136, 72, 14);
-  ctx.fill();
-  ctx.stroke();
-  items.forEach((item, idx) => {
-    const offsetY = idx * 30;
-    ctx.fillStyle = item.color;
-    ctx.beginPath();
-    ctx.arc(x, y + offsetY, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#334155";
-    ctx.font = "850 11px Inter, Segoe UI, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText(item.label, x + 12, y + 4 + offsetY);
-  });
-}
-
-function drawAxis(ctx, padding, width, height, zeroY = null) {
-  const bottom = padding.top + (height - padding.top - padding.bottom);
-  ctx.strokeStyle = "rgba(28, 38, 66, 0.12)";
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 5; i += 1) {
-    const y = padding.top + (bottom - padding.top) * (i / 5);
-    ctx.beginPath();
-    ctx.moveTo(padding.left, y);
-    ctx.lineTo(width - padding.right, y);
-    ctx.stroke();
-  }
-  if (zeroY !== null) {
-    ctx.strokeStyle = "rgba(11, 16, 32, 0.32)";
-    ctx.beginPath();
-    ctx.moveTo(padding.left, zeroY);
-    ctx.lineTo(width - padding.right, zeroY);
-    ctx.stroke();
-  }
-}
-
-function roundRect(ctx, x, y, width, height, radius) {
-  const h = Math.max(0, height);
-  const r = Math.min(radius, Math.abs(width) / 2, Math.abs(h) / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + width, y, x + width, y + h, r);
-  ctx.arcTo(x + width, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + width, y, r);
-  ctx.closePath();
-}
-
-function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
-  const words = String(text).split(" ");
-  let line = "";
-  let lines = [];
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word;
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = test;
-    }
-  }
-  if (line) lines.push(line);
-  lines.slice(0, 2).forEach((item, index) => ctx.fillText(item, x, y + index * lineHeight));
-}
-
-function shortValue(value) {
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(1)}k`;
-  if (Math.abs(value) >= 100) return value.toFixed(0);
-  if (Math.abs(value) >= 10) return value.toFixed(1);
-  return value.toFixed(2);
-}
-
-function commercialLabel(modelKey) {
-  return modelKey === "raas" ? "RaaS / managed service" : modelKey === "lease" ? "Operating lease" : "Purchase + service";
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function toast(message) {
-  const toastEl = document.getElementById("toast");
-  toastEl.textContent = message;
-  toastEl.classList.add("show");
-  setTimeout(() => toastEl.classList.remove("show"), 2800);
-}
-
-window.addEventListener("resize", () => {
-  clearTimeout(window.__dpwResizeTimer);
-  window.__dpwResizeTimer = setTimeout(() => {
-    drawPerformanceChart();
-    drawCostChart();
-    drawOemScoreChart();
-    if (simulation) simulation.resize();
-  }, 150);
+document.addEventListener('submit',event=>{
+  if(event.target.id!=='modal-form')return;event.preventDefault();
+  if(!modalSubmit)return;const callback=modalSubmit;
+  try{const result=callback(readForm(event.target));if(result instanceof Promise){result.then(closeDialog).catch(error=>{const el=document.getElementById('modal-error');if(el)el.textContent=error.message;});}else closeDialog();}catch(error){const el=document.getElementById('modal-error');if(el)el.textContent=error.message;}
 });
 
-window.addEventListener("beforeunload", () => {
-  if (telemetryTimer) clearInterval(telemetryTimer);
+document.addEventListener('click',async event=>{
+  const node=event.target.closest('[data-action]');if(!node||node.tagName==='SELECT'||node.tagName==='INPUT')return;
+  const action=node.dataset.action,id=node.dataset.id,c=store.current();
+  try{
+    if(action==='navigate'){ui.view=id;ui.mobileMenu=false;updateCase(c=>c.lastTab=ui.tab,false);render();window.scrollTo(0,0);}
+    else if(action==='toggle-menu'){ui.mobileMenu=!ui.mobileMenu;render();}
+    else if(action==='open-case'){store.setActive(id);ui.view='case';ui.tab=node.dataset.tab||store.current().lastTab||'Overview';ui.mobileMenu=false;updateCase(c=>c.lastTab=ui.tab,false);render();window.scrollTo(0,0);}
+    else if(action==='case-tab'){ui.tab=id;updateCase(c=>c.lastTab=id,false);window.scrollTo(0,0);}
+    else if(action==='new-case')newCaseDialog();
+    else if(action==='edit-case')editCaseDialog();
+    else if(action==='new-action')actionDialog();
+    else if(action==='edit-action')actionDialog(id);
+    else if(action==='remove-action'){updateCase(c=>{const removed=c.actions.find(a=>a.id===id);c.history.push({event:'Action removed',revision:c.revision,date:new Date().toISOString(),action:copy(removed)});c.actions=c.actions.filter(a=>a.id!==id);c.actions.forEach(a=>{if(a.dependency===id)a.dependency=removed.dependency;});c.scenarios.forEach(s=>delete s.assignments[id]);cleanScenarioCounts(c);});closeDialog();notify('Action removed. A record is kept in case history.');}
+    else if(action==='new-config')configDialog();
+    else if(action==='edit-config')configDialog(id);
+    else if(action==='new-source')sourceDialog();
+    else if(action==='edit-source')sourceDialog(id);
+    else if(action==='attach-file')document.getElementById('source-file').click();
+    else if(action==='import-actions')document.getElementById('actions-import').click();
+    else if(action==='paste-actions')pasteActionsDialog();
+    else if(action==='import-workspace')document.getElementById('workspace-import').click();
+    else if(action==='fit-detail'){const a=c.actions.find(a=>a.id===id),v=store.get().configs.find(v=>v.id===node.dataset.config),fit=fitAction(a,v);openDialog(`${a.name} / ${v.name}`,table(['Requirement','Status','Detail'],fit.checks.map(x=>row([hx(x.name),chip(x.status,x.status==='fit'?'green':'amber'),hx(x.detail)])))+`<div class="callout subtle"><p>${hx(v.source)} · ${hx(v.sourceNote)}<br>${hx(fit.note)}</p></div>`);}
+    else if(action==='choose-scenario'){updateCase(c=>c.selectedScenarioId=id);notify('Selected option updated.');}
+    else if(action==='duplicate-scenario'){updateCase(c=>{const next=copy(activeScenario());next.id=uid('option');next.name=`${next.name} · copy`;next.kind=next.kind==='manual'?'hybrid':next.kind;c.scenarios.push(next);c.selectedScenarioId=next.id;});notify('Option copied. Edit its assignments or fleet count.');}
+    else if(action==='new-scenario'){updateCase(c=>{const s={id:uid('option'),name:`Custom hybrid ${c.scenarios.length}`,kind:'hybrid',counts:{},assignments:{},manualFactor:1};c.scenarios.push(s);c.selectedScenarioId=s.id;});ui.tab='Matches';render();}
+    else if(action==='fleet-search')fleetSearchDialog();
+    else if(action==='generate-options'){const generated=generateOptions(c,store.get().configs,6);if(!generated.length)throw new Error('Complete the action requirements and technology task times before generating options.');updateCase(c=>{c.history.push({event:'Options generated',date:new Date().toISOString(),revision:c.revision,scenarios:copy(c.scenarios.filter(s=>s.generated))});c.lastTab='Scenarios';c.scenarios=c.scenarios.filter(s=>!s.generated);for(const s of generated){s.id=uid('option');c.scenarios.push(s);}c.selectedScenarioId=generated[0].id;});ui.tab='Scenarios';render();notify(`${generated.length} draft options generated. Review assignments, handoffs, quality, and evidence.`);}
+    else if(action==='use-search'){const next=copy(fleetResults[Number(id)].scenario);next.id=uid('option');updateCase(c=>{c.scenarios.push(next);c.selectedScenarioId=next.id;});closeDialog();notify('Fleet option added to the case.');}
+    else if(action==='record-decision')decisionDialog();
+    else if(action==='new-test')testDialog();
+    else if(action==='add-asset')assetDialog();
+    else if(action==='edit-asset')assetDialog(id,node.dataset.case);
+    else if(action==='plan-fleet'){const s=activeScenario();if(!Object.keys(s.counts).length)throw new Error('Select an option with an assigned fleet.');let created=0;updateCase(c=>{for(const[configId,count]of Object.entries(s.counts)){const existing=c.deployment.assets.filter(a=>a.configId===configId&&['Planned','In pilot','In service'].includes(a.status)).length;for(let i=existing;i<count;i++){c.deployment.assets.push({id:uid('asset'),name:`${store.get().configs.find(v=>v.id===configId)?.name||configId} ${i+1}`,configId,status:'Planned',serial:'Not assigned',release:c.deployment.release,planScenarioId:s.id,note:`Plan from option ${s.name}, case v${c.revision}.`});created++;}}},false);notify(created?'Planned assets added. No hardware was deployed.':'The asset register already contains the requested fleet counts.');}
+    else if(action==='review-readiness'){const ready=readiness(c,store.get().configs);openDialog('Pilot readiness review',`<div class="callout"><p>${ready.readyForReview?'The local record is complete for review. The accountable site team must still make the real decision.':'Readiness is not established. Resolve these items before a real pilot review.'}</p></div><ul class="warning-list">${ready.gaps.map(x=>`<li>${hx(x)}</li>`).join('')}</ul><p>No production authorization is issued by this prototype.</p>`);}
+    else if(action==='adapter-request'){const s=activeScenario();jsonDownload(`${id.replace(/[^a-z0-9]/gi,'-')}-request.json`,{type:id,status:'Not connected',caseId:c.id,caseRevision:c.revision,process:c.actions,scenario:s,configurations:store.get().configs.filter(v=>Object.keys(s.counts).includes(v.id)),requiredOutputs:['Versioned inputs','Test conditions and sample count','Task times and variation','First-pass success, retries, and human intervention','Failure and recovery records','Operating envelope and limits'],deployment:copy(c.deployment)});notify('Service request downloaded. No external job was started.');}
+    else if(action==='new-observation')observationDialog();
+    else if(action==='import-observations')document.getElementById('observations-import').click();
+    else if(action==='new-issue')issueDialog();
+    else if(action==='edit-issue')issueDialog(id);
+    else if(action==='observation-issue')issueDialog(null,id);
+    else if(action==='export-workspace'){jsonDownload('hybrid-workforce-workspace.json',store.get());notify('Workspace exported.');}
+    else if(action==='export-case'){jsonDownload(`${c.id}.json`,{...copy(store.get()),activeCaseId:c.id,cases:[copy(c)]});notify('Editable case exported with its configurations.');}
+    else if(action==='report'){downloadFile(`${c.id}-recommendation.html`,renderReport(c,store.get().configs),'text/html');notify('Recommendation report downloaded.');}
+    else if(action==='close-dialog')closeDialog();
+  }catch(error){notify(error.message,'error');}
 });
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", init);
-} else {
-  init();
-}
+document.addEventListener('change',async event=>{
+  const node=event.target,c=store.current();
+  try{
+    if(node.dataset.field){const value=node.type==='number'?(node.value===''?null:Number(node.value)):node.value;if(node.type==='number'&&value!=null&&(!Number.isFinite(value)||(node.min!==''&&value<Number(node.min))||(node.max!==''&&value>Number(node.max))||(node.step==='1'&&!Number.isInteger(value)))){render();throw new Error('Use a value within the field limits. The previous value was kept.');}updateCase(c=>setPath(c,node.dataset.field,value),true,true);return;}
+    if(node.dataset.assignment){const actor=node.value;updateCase(c=>{let s=activeScenario();if(s.kind==='manual'&&actor!=='human'){s={...copy(s),id:uid('option'),name:'Custom hybrid from current method',kind:'hybrid'};c.scenarios.push(s);c.selectedScenarioId=s.id;}if(actor==='human')delete s.assignments[node.dataset.assignment];else s.assignments[node.dataset.assignment]=actor;cleanScenarioCounts(c);});return;}
+    if(node.dataset.count){updateCase(c=>activeScenario().counts[node.dataset.count]=node.value===''?null:Number(node.value));return;}
+    if(node.dataset.check){updateCase(c=>c.deployment.checklist[node.dataset.check]=node.checked);return;}
+    if(node.dataset.question){updateCase(c=>c.answers[node.dataset.question]=node.value,false,true);return;}
+    const action=node.dataset.action;
+    if(action==='select-scenario'){updateCase(c=>c.selectedScenarioId=node.value);}
+    else if(action==='select-case'){store.setActive(node.value);}
+    else if(action==='stage-filter'){ui.stageFilter=node.value;render();}
+    else if(action==='site-filter'){ui.siteFilter=node.value;render();}
+    else if(action==='role-view'){ui.role=node.value;ui.view=node.value==='Executive view'?'executive':node.value==='Delivery view'?'deployments':'evaluations';render();}
+    else if(action==='question-group'){ui.questionGroup=node.value;render();}
+    else if(action==='case-search'){ui.search=node.value;render();}
+    else if(action==='question-search'){ui.questionSearch=node.value;render();}
+    else if(node.id==='workspace-import'&&node.files[0]){const file=node.files[0];if(file.size>10_000_000)throw new Error('Use a workspace file smaller than 10 MB.');workspaceImportPreview(JSON.parse(await file.text()));}
+    else if(node.id==='actions-import'&&node.files[0]){const file=node.files[0];previewActions(parseActions(await file.text(),file.name.split('.').at(-1).toLowerCase()));}
+    else if(node.id==='observations-import'&&node.files[0]){
+      const file=node.files[0];if(file.size>2_000_000)throw new Error('Use a CSV smaller than 2 MB.');
+      const [headers,...rows]=parseCsv(await file.text());if(!headers||rows.length>1000)throw new Error('Use a CSV with up to 1,000 observation rows.');
+      const records=rows.map(values=>{const raw=Object.fromEntries(headers.map((key,i)=>[key,values[i]]));const o={...raw,id:uid('observation'),status:raw.status==='Measured'?'Measured':'Sample',revision:c.revision,scenarioId:c.selectedScenarioId};for(const key of ['hours','units','rejects','interventions','humanHours','downtimeHours','chargeHours','cost','baselineCost'])o[key]=raw[key]==null||raw[key]===''?(key==='baselineCost'?null:NaN):Number(raw[key]);const errors=validateObservation(o);if(errors.length)throw new Error(errors[0]);return o;});
+      if(!records.length)throw new Error('The CSV contains no observations.');
+      openDialog('Review observation import',table(['Date','Source','Data status','Units','Hours'],records.map(o=>row([hx(o.date),hx(o.source),chip(o.status),number(o.units),number(o.hours)]))),()=>{updateCase(c=>c.observations.push(...records),false);notify('Observation records imported.');},{submit:'Import observations',wide:true});
+    }
+    else if(node.id==='source-file'&&node.files[0]){
+      const file=node.files[0];if(file.size>25_000_000)throw new Error('Use a file smaller than 25 MB.');
+      let fileId=null;try{if(location.protocol==='file:')throw new Error();const response=await fetch(`/api/files?name=${encodeURIComponent(file.name)}`,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file});if(!response.ok)throw new Error();fileId=(await response.json()).id;}catch{}
+      updateCase(c=>c.sources.push({id:uid('source'),name:file.name,type:'Other',status:'Unknown',date:new Date().toISOString().slice(0,10),note:fileId?`Stored source file (${number(file.size/1024)} KB). Review and map the relevant fields. No CAD, video, or engineering-model parsing has run.`:'File reference only. File content was not stored because the local file service is unavailable.',fileId}));notify(fileId?'Source file stored. Review and map its inputs.':'Reference added. File content was not stored.');
+    }
+  }catch(error){notify(error.message,'error');}
+});
+
+window.matchMedia('(max-width:700px)').addEventListener('change',render);
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&ui.mobileMenu){ui.mobileMenu=false;render();document.querySelector('.mobile-toggle')?.focus();}});
+window.addEventListener('hashchange',()=>{const view=location.hash.slice(1);if(['executive','evaluations','deployments','catalog','evidence'].includes(view)){ui.view=view;render();}});
+window.addEventListener('beforeunload',()=>{store.flush();});
+render();store.connect();
+
+})();

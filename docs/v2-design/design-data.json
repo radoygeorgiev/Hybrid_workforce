@@ -1,0 +1,1107 @@
+{
+  "features": [
+    {
+      "id": "F01",
+      "group": "Dashboards",
+      "feature": "Executive view",
+      "behavior": "Show expected, approved, and observed economics in separate totals. Filter by site, process, technology, and date.",
+      "v2_mode": "Working local view",
+      "acceptance_check": "A draft case does not enter the observed savings total."
+    },
+    {
+      "id": "F02",
+      "group": "Dashboards",
+      "feature": "Evaluation pipeline",
+      "behavior": "Show initiative, owner, stage, missing data, next action, demand, candidate options, and expected outcome.",
+      "v2_mode": "Working local view",
+      "acceptance_check": "Open a case at its last saved stage."
+    },
+    {
+      "id": "F03",
+      "group": "Dashboards",
+      "feature": "Deployment view",
+      "behavior": "Show site, process, asset count, configuration, release, stage, uptime, intervention rate, and expected versus observed result.",
+      "v2_mode": "Local view with marked sample data",
+      "acceptance_check": "A planned robot is separate from a robot in a site pilot or in service."
+    },
+    {
+      "id": "F04",
+      "group": "Case",
+      "feature": "Initiative record",
+      "behavior": "Create a case for a site and process. Record the business need, scope, owner, and decision target.",
+      "v2_mode": "Working local record",
+      "acceptance_check": "The tote PoC is a specific case. Other cases use the same workflow."
+    },
+    {
+      "id": "F05",
+      "group": "Case",
+      "feature": "Case stages",
+      "behavior": "Show current stage, next action, missing items, owner, and change history. Permit draft work at later stages.",
+      "v2_mode": "Working local record",
+      "acceptance_check": "Draft deployment planning does not mean deployment approval."
+    },
+    {
+      "id": "F06",
+      "group": "Inputs",
+      "feature": "Input register",
+      "behavior": "Add source files, source links, values, units, dates, versions, and data status. Show required data for the selected process.",
+      "v2_mode": "Working local record",
+      "acceptance_check": "Unknown differs from zero and from sample data."
+    },
+    {
+      "id": "F07",
+      "group": "Inputs",
+      "feature": "Structured import",
+      "behavior": "Import validated process and scenario CSV/JSON. Preview changes before import. Export an editable case.",
+      "v2_mode": "Working local import/export",
+      "acceptance_check": "An invalid import leaves the current case intact."
+    },
+    {
+      "id": "F08",
+      "group": "Inputs",
+      "feature": "File intake",
+      "behavior": "Attach engineering models, CAD, MTM, SOPs, images, and video references. Map critical values by hand.",
+      "v2_mode": "File register and manual mapping",
+      "acceptance_check": "The app states that CAD parsing and video interpretation are not connected."
+    },
+    {
+      "id": "F09",
+      "group": "Inputs",
+      "feature": "Baseline check",
+      "behavior": "Compare observed, time-study, and engineering-model demand, hours, staffing, and throughput.",
+      "v2_mode": "Working local calculation",
+      "acceptance_check": "A large difference creates a visible question. It is not silently overwritten."
+    },
+    {
+      "id": "F10",
+      "group": "Process",
+      "feature": "Process editor",
+      "behavior": "Create tasks, work elements, and actions. Set sequence, branches, repeat counts, and parallel work. Keep a simple entry view.",
+      "v2_mode": "Working local editor",
+      "acceptance_check": "A change to an action changes the next evaluation or marks old results out of date."
+    },
+    {
+      "id": "F11",
+      "group": "Process",
+      "feature": "Action record",
+      "behavior": "Record actor, verb, object, source/target, tool, conditions, timing, success, failure, and recovery.",
+      "v2_mode": "Working local editor",
+      "acceptance_check": "An action without a known duration remains unknown."
+    },
+    {
+      "id": "F12",
+      "group": "Process",
+      "feature": "Human baseline",
+      "behavior": "Show task time, shift coverage, observed output, minimum staff, exceptions, and current cost.",
+      "v2_mode": "Working local calculation",
+      "acceptance_check": "The baseline uses the same calendar and output definition as each option."
+    },
+    {
+      "id": "F13",
+      "group": "Process",
+      "feature": "Layout context",
+      "behavior": "Show an annotated 2D plan, routes, distances, workstations, handoffs, buffers, and charge locations.",
+      "v2_mode": "Manual plan with marked sample view",
+      "acceptance_check": "The view does not claim to generate a warehouse from CAD."
+    },
+    {
+      "id": "F14",
+      "group": "Process",
+      "feature": "Needs per action",
+      "behavior": "Link required skills to measured limits and test conditions. Add capability needs such as payload, reach, grip, navigation, and sensing.",
+      "v2_mode": "Working local mapping",
+      "acceptance_check": "Each hard requirement has a unit or an explicit test condition."
+    },
+    {
+      "id": "F15",
+      "group": "Supply",
+      "feature": "Technology library",
+      "behavior": "Store humanoids, AMRs/AGVs, arms, fixed automation, and assist tools in one library. Permit new technology types.",
+      "v2_mode": "Working local library",
+      "acceptance_check": "The case can compare different technology classes."
+    },
+    {
+      "id": "F16",
+      "group": "Supply",
+      "feature": "Configuration record",
+      "behavior": "Version the robot, tool, sensors, software, and interface as one option. Record compatibility and supplier support.",
+      "v2_mode": "Working local record",
+      "acceptance_check": "Changing a gripper creates a different evaluated configuration."
+    },
+    {
+      "id": "F17",
+      "group": "Supply",
+      "feature": "Capability and source record",
+      "behavior": "Store limits, conditions, source, validity, and test method. Keep supplier claims separate from measured site results.",
+      "v2_mode": "Working local record",
+      "acceptance_check": "A supplier speed claim does not become a proven site cycle time."
+    },
+    {
+      "id": "F18",
+      "group": "Supply",
+      "feature": "Commercial terms",
+      "behavior": "Record quote date, validity, currency, purchase/lease/RaaS terms, service cover, and one-time charges.",
+      "v2_mode": "Working local record",
+      "acceptance_check": "An expired or missing quote stays visible in the result."
+    },
+    {
+      "id": "F19",
+      "group": "Matching",
+      "feature": "Action-to-product matrix",
+      "behavior": "Show supported, blocked, unknown, or not assessed for each action/configuration pair. Explain each result.",
+      "v2_mode": "Working local rules",
+      "acceptance_check": "One failed hard requirement cannot be offset by a high score elsewhere."
+    },
+    {
+      "id": "F20",
+      "group": "Matching",
+      "feature": "Partial augmentation",
+      "behavior": "Select a valid bundle of actions for each actor. Retain human work and recovery. Show time coverage separately from action count.",
+      "v2_mode": "Working local editor and rules",
+      "acceptance_check": "Five of twelve actions does not automatically remove five twelfths of the labour."
+    },
+    {
+      "id": "F21",
+      "group": "Matching",
+      "feature": "Work bundle checks",
+      "behavior": "Check preconditions, task continuity, shared tools, load control, reach, safety constraints, and handoffs.",
+      "v2_mode": "Rules with visible unknowns",
+      "acceptance_check": "A robot cannot receive a carry action without a valid pickup and placement method."
+    },
+    {
+      "id": "F22",
+      "group": "Matching",
+      "feature": "Alternative methods",
+      "behavior": "Include current work, manual process improvement, assisted work, hybrid teams, and automation where feasible.",
+      "v2_mode": "Working local scenarios",
+      "acceptance_check": "The engine can recommend the current method or ask for more data."
+    },
+    {
+      "id": "F23",
+      "group": "Evaluation",
+      "feature": "Hybrid process editor",
+      "behavior": "Assign actions to roles and configurations. Add handoffs, buffers, parallel work, recovery, and changed layout needs.",
+      "v2_mode": "Working local editor",
+      "acceptance_check": "The proposed process has its own version and differs visibly from the baseline."
+    },
+    {
+      "id": "F24",
+      "group": "Evaluation",
+      "feature": "Performance basis",
+      "behavior": "Select an assumption, supplier result, benchmark, simulation result, or field trial for each task/configuration/condition set.",
+      "v2_mode": "Working record; external runs not connected",
+      "acceptance_check": "Every cycle time and success rate links to its source."
+    },
+    {
+      "id": "F25",
+      "group": "Evaluation",
+      "feature": "Evidence request",
+      "behavior": "List missing tests. Prepare a benchmark or simulation brief with input/output fields, conditions, and acceptance criteria.",
+      "v2_mode": "Working brief; external job shown as not connected",
+      "acceptance_check": "A simulated sample run has a demo label. It does not close a real test gap."
+    },
+    {
+      "id": "F26",
+      "group": "Evaluation",
+      "feature": "Fleet and team search",
+      "behavior": "Compare bounded fleet sizes, technology combinations, task bundles, shift patterns, and retained staff.",
+      "v2_mode": "Working bounded local calculation",
+      "acceptance_check": "Show the search bounds, tested options, rejected options, and reasons."
+    },
+    {
+      "id": "F27",
+      "group": "Evaluation",
+      "feature": "Capacity and availability",
+      "behavior": "Use active time, travel, charge, maintenance, failures, recovery, queues, handoffs, and peak demand. State model limits.",
+      "v2_mode": "Screening calculation; complex event simulation deferred",
+      "acceptance_check": "Do not count charging twice inside both availability and a second charge factor."
+    },
+    {
+      "id": "F28",
+      "group": "Evaluation",
+      "feature": "Scenario stress test",
+      "behavior": "Vary demand, task time, success, interventions, availability, cost, and benefit capture. Include peak and failure cases.",
+      "v2_mode": "Working local calculation",
+      "acceptance_check": "Show which requirement fails first and the value at that point."
+    },
+    {
+      "id": "F29",
+      "group": "Evaluation",
+      "feature": "Process evaluation results",
+      "behavior": "Show completed units, bottleneck, human workload, robot load, queue/wait limits, quality, and unserved demand.",
+      "v2_mode": "Planning results with model limits",
+      "acceptance_check": "A failure to meet throughput remains visible even if savings look positive."
+    },
+    {
+      "id": "F30",
+      "group": "Economics",
+      "feature": "Staffing and benefit bridge",
+      "behavior": "Separate time removed, residual work, achievable staffing change, avoided hires, redeployed capacity, and cash benefit.",
+      "v2_mode": "Working local calculation",
+      "acceptance_check": "A fractional time gain does not create an automatic staff reduction."
+    },
+    {
+      "id": "F31",
+      "group": "Economics",
+      "feature": "Full cost model",
+      "behavior": "Include all selected capital, operating, integration, site, support, compute, energy, training, recovery, and ramp-up costs.",
+      "v2_mode": "Working local cash-flow model",
+      "acceptance_check": "Purchase cash flow does not count depreciation as a second cash cost."
+    },
+    {
+      "id": "F32",
+      "group": "Economics",
+      "feature": "Commercial models",
+      "behavior": "Compare purchase, lease, and RaaS. Define inclusions to prevent duplicate support, maintenance, or software charges.",
+      "v2_mode": "Working local calculation",
+      "acceptance_check": "Costs are visible by year and by cost owner."
+    },
+    {
+      "id": "F33",
+      "group": "Economics",
+      "feature": "Business case",
+      "behavior": "Show net annual cash saving, first-year cash flow, payback, life-cycle cost, cost per completed unit, and optional discounted value.",
+      "v2_mode": "Working local calculation",
+      "acceptance_check": "A negative case shows no positive payback claim."
+    },
+    {
+      "id": "F34",
+      "group": "Economics",
+      "feature": "Contract and viewpoint",
+      "behavior": "Limit the study to the agreed horizon. Show customer, site, and DP World retained benefit where required.",
+      "v2_mode": "Working local calculation",
+      "acceptance_check": "A cost-plus benefit transferred to a customer is not counted as DP World cash saving."
+    },
+    {
+      "id": "F35",
+      "group": "Decision",
+      "feature": "Candidate comparison",
+      "behavior": "Compare feasible options on throughput, quality, human work, cost, readiness, and evidence gaps. Explain trade-offs.",
+      "v2_mode": "Working local view",
+      "acceptance_check": "There is no unexplained single score that can hide a failed constraint."
+    },
+    {
+      "id": "F36",
+      "group": "Decision",
+      "feature": "Evidence and uncertainty",
+      "behavior": "Show technical status, evidence basis, economic stress results, and deployment readiness separately.",
+      "v2_mode": "Working local view",
+      "acceptance_check": "No percentage is labelled probability without a defined and supported method."
+    },
+    {
+      "id": "F37",
+      "group": "Decision",
+      "feature": "Recommendation report",
+      "behavior": "State the site/process, tasks assigned, people and equipment, demand met, cost, savings, payback, assumptions, gaps, and next action.",
+      "v2_mode": "Working local report/export",
+      "acceptance_check": "The report names the exact process and configuration versions."
+    },
+    {
+      "id": "F38",
+      "group": "Decision",
+      "feature": "Recorded decision",
+      "behavior": "Record continue, change, test, defer, or stop with an owner and reason. Preserve the reviewed result.",
+      "v2_mode": "Working local record; authority is demonstrative",
+      "acceptance_check": "Changing a critical input marks the former decision out of date."
+    },
+    {
+      "id": "F39",
+      "group": "Deployment",
+      "feature": "Deployment plan",
+      "behavior": "Create a plan from the selected scenario. Include tasks, roles, interfaces, schedule, site changes, cost, and success measures.",
+      "v2_mode": "Working local plan",
+      "acceptance_check": "The selected robot count and process version carry into the plan."
+    },
+    {
+      "id": "F40",
+      "group": "Deployment",
+      "feature": "Execution route",
+      "behavior": "Select OEM configuration/commissioning, policy/model adaptation, or a combined route. Record who must supply each element.",
+      "v2_mode": "Planning screens",
+      "acceptance_check": "Training is required only when the selected solution needs it."
+    },
+    {
+      "id": "F41",
+      "group": "Deployment",
+      "feature": "Data and training plan",
+      "behavior": "List datasets, labels, simulation assets, target hardware, model/policy version, compute, training runs, tests, and failures.",
+      "v2_mode": "Planning records and marked demo runs",
+      "acceptance_check": "No screen states that the app trained a real robot model."
+    },
+    {
+      "id": "F42",
+      "group": "Deployment",
+      "feature": "Release record",
+      "behavior": "Link the supported hardware, configuration, software/model, test evidence, operating limits, and rollback version.",
+      "v2_mode": "Working local record; no hardware connection",
+      "acceptance_check": "A release cannot imply support for unverified hardware."
+    },
+    {
+      "id": "F43",
+      "group": "Deployment",
+      "feature": "Site readiness and tests",
+      "behavior": "Track work-area preparation, interfaces, charge plan, operator training, fallback, support, and required site tests.",
+      "v2_mode": "Working local checklist and test log",
+      "acceptance_check": "A demo checklist is separate from a real site safety acceptance."
+    },
+    {
+      "id": "F44",
+      "group": "Deployment",
+      "feature": "Pilot plan and review",
+      "behavior": "Set supervised trial conditions, stop rules, success measures, duration, sample needs, and accountable decisions.",
+      "v2_mode": "Working local plan/review",
+      "acceptance_check": "A passed training run does not authorize a site pilot."
+    },
+    {
+      "id": "F45",
+      "group": "Deployment",
+      "feature": "Hardware transfer",
+      "behavior": "Show the future sequence to package, load, check, and start the approved release on supported hardware.",
+      "v2_mode": "Visible integration placeholder",
+      "acceptance_check": "Use Plan transfer or View demo. Do not offer a false live deployment button."
+    },
+    {
+      "id": "F46",
+      "group": "Operations",
+      "feature": "Asset and release register",
+      "behavior": "Track robots, site, process, counts, configuration, release, status, support owner, and service history.",
+      "v2_mode": "Working local record",
+      "acceptance_check": "Planned, in pilot, in service, paused, and retired assets remain distinct."
+    },
+    {
+      "id": "F47",
+      "group": "Operations",
+      "feature": "Observed results",
+      "behavior": "Enter or import throughput, good units, failures, interventions, active/charge/down time, human hours, and cost.",
+      "v2_mode": "Manual/CSV local input; live feed deferred",
+      "acceptance_check": "Observed records have time windows, denominators, and source labels."
+    },
+    {
+      "id": "F48",
+      "group": "Operations",
+      "feature": "Expected versus observed",
+      "behavior": "Compare the pilot with the approved baseline and scenario. Explain deviations and update the business case.",
+      "v2_mode": "Working local calculation",
+      "acceptance_check": "A change in demand is shown before attributing the difference to the robot."
+    },
+    {
+      "id": "F49",
+      "group": "Operations",
+      "feature": "Improve and scale",
+      "behavior": "Open an issue, revise a process/configuration, plan a new test, roll back, or prepare another site with a local gap check.",
+      "v2_mode": "Working local workflow",
+      "acceptance_check": "A result from one site does not automatically prove the same result at another site."
+    },
+    {
+      "id": "F50",
+      "group": "Shared",
+      "feature": "Case data and versioning",
+      "behavior": "Save local cases, version critical inputs, export/import complete editable records, and keep source/result links.",
+      "v2_mode": "Working local persistence",
+      "acceptance_check": "Reload and export/import preserve the case. Recalculation uses current inputs."
+    },
+    {
+      "id": "F51",
+      "group": "Shared",
+      "feature": "Plain language and units",
+      "behavior": "Use short active sentences, stable terms, units beside fields, clear errors, keyboard access, and progressive detail.",
+      "v2_mode": "All version 2 screens",
+      "acceptance_check": "A user can follow the next action without knowing the robotics stack."
+    },
+    {
+      "id": "F52",
+      "group": "Shared",
+      "feature": "Integration boundaries",
+      "behavior": "Define replaceable services for CAD, process simulation, physics, training, vendor deployment, WMS, and telemetry.",
+      "v2_mode": "Typed contracts and clear placeholders",
+      "acceptance_check": "An unavailable adapter returns Not connected, not a synthetic success."
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q01",
+      "group": "Design",
+      "question": "Does the proposed flow define the correct product scope?",
+      "proposed_default": "Adopt the flow. Keep deployment and measured improvement in the same case.",
+      "proposed_owner": "Radoy and Rohit",
+      "decision_time": "Validate flow",
+      "status": "Open"
+    },
+    {
+      "id": "Q02",
+      "group": "Design",
+      "question": "Does one shared workflow cover all technologies?",
+      "proposed_default": "Yes. Change the configuration, evidence, and deployment route by technology.",
+      "proposed_owner": "Radoy and Rohit",
+      "decision_time": "Validate flow",
+      "status": "Open"
+    },
+    {
+      "id": "Q03",
+      "group": "Design",
+      "question": "Are Executive, Evaluations, and Deployments the correct three main views?",
+      "proposed_default": "Use these views. Put libraries under shared navigation.",
+      "proposed_owner": "Radoy",
+      "decision_time": "Validate flow",
+      "status": "Open"
+    },
+    {
+      "id": "Q04",
+      "group": "Design",
+      "question": "Must the mockup show only the tote PoC or also other use cases?",
+      "proposed_default": "Use the tote case as the main path. Add small, marked sample AMR, arm, and mixed-technology cases.",
+      "proposed_owner": "Radoy and Rohit",
+      "decision_time": "Validate flow",
+      "status": "Open"
+    },
+    {
+      "id": "Q05",
+      "group": "Design",
+      "question": "Which outcome has priority when cost, capacity, quality, and readiness conflict?",
+      "proposed_default": "Meet hard requirements first. Show the feasible trade-offs. Do not set hidden weights.",
+      "proposed_owner": "Rohit and operations",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q06",
+      "group": "Design",
+      "question": "Which terms and languages must the product use?",
+      "proposed_default": "Use controlled English. Define task, work element, action, skill, capability, payback, and data status in a short glossary.",
+      "proposed_owner": "Radoy",
+      "decision_time": "Validate flow",
+      "status": "Open"
+    },
+    {
+      "id": "Q07",
+      "group": "Process",
+      "question": "What is the exact site and process for the first case?",
+      "proposed_default": "Confirm the automotive site name, empty tote types, sorting rule, source/destination, and approved SOP. Do not merge parts kitting into this PoC.",
+      "proposed_owner": "Site owner and Diego",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q08",
+      "group": "Process",
+      "question": "What are the start/end points and upstream/downstream duties?",
+      "proposed_default": "Include tote presentation, placement, container exchange, blocked routes, and confirmation when they belong to the process.",
+      "proposed_owner": "Site engineer",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q09",
+      "group": "Process",
+      "question": "Which atomic process breakdown is authoritative?",
+      "proposed_default": "Use a site-reviewed breakdown. The mentioned process image was not available in this conversation; any drafted actions must stay illustrative.",
+      "proposed_owner": "Radoy and site engineer",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q10",
+      "group": "Process",
+      "question": "How much detail must an operator enter?",
+      "proposed_default": "Start with task and action. Offer work-element and motion detail when it changes fit or timing. Do not require every hierarchy level on every form.",
+      "proposed_owner": "Radoy and process engineer",
+      "decision_time": "Validate flow",
+      "status": "Open"
+    },
+    {
+      "id": "Q11",
+      "group": "Process",
+      "question": "Which MTM or time-study methods are valid?",
+      "proposed_default": "Record the method and source. Support observed and standard times. Do not claim certified MTM without the required method and expertise.",
+      "proposed_owner": "Industrial engineering",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q12",
+      "group": "Process",
+      "question": "Which actions overlap or require the same person/tool?",
+      "proposed_default": "Record dependencies, shared resources, repeat counts, and parallel work. Do not sum overlapping action durations as elapsed cycle time.",
+      "proposed_owner": "Site engineer",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q13",
+      "group": "Process",
+      "question": "Which handoffs, supervision, retries, and recovery duties remain with people?",
+      "proposed_default": "Create explicit work records for each duty. Confirm their frequency and active time.",
+      "proposed_owner": "Site owner and supplier",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q14",
+      "group": "Process",
+      "question": "Is the 5,000-tote example per person, team, shift, or day?",
+      "proposed_default": "Treat all numbers in the latest request as examples until their units and time windows are confirmed.",
+      "proposed_owner": "Radoy and site owner",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q15",
+      "group": "Inputs",
+      "question": "Which engineering model is available and how does it derive staff?",
+      "proposed_default": "Map the required cells/fields manually first. Reconcile its assumptions with observed work.",
+      "proposed_owner": "Engineering",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q16",
+      "group": "Inputs",
+      "question": "Which layout, scan, photo, and video files exist for the actual site?",
+      "proposed_default": "Store the files and manually map distances and clearances. Keep automatic CAD conversion as a future adapter.",
+      "proposed_owner": "Site engineering",
+      "decision_time": "Before external integration",
+      "status": "Open"
+    },
+    {
+      "id": "Q17",
+      "group": "Inputs",
+      "question": "Which order, SKU, inventory, and event history can the site provide?",
+      "proposed_default": "Use a defined representative period and peak periods. Record missing coverage.",
+      "proposed_owner": "Operations and IT",
+      "decision_time": "Before external integration",
+      "status": "Open"
+    },
+    {
+      "id": "Q18",
+      "group": "Inputs",
+      "question": "Which workforce calendar and fully loaded cost basis apply?",
+      "proposed_default": "Use anonymous roles, shift coverage, productive hours, and current site rates. Separate annual headcount from people per shift.",
+      "proposed_owner": "Operations and finance",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q19",
+      "group": "Inputs",
+      "question": "What restrictions apply to video, employee data, and cloud storage?",
+      "proposed_default": "Record permitted sources, processing location, access, and retention. Use synthetic media in the mockup.",
+      "proposed_owner": "Site data owner and AWS",
+      "decision_time": "Before real data use",
+      "status": "Open"
+    },
+    {
+      "id": "Q20",
+      "group": "Supply",
+      "question": "Who owns the technology library and approves each source?",
+      "proposed_default": "DP World owns the record structure. A named owner reviews supplier claims and trial evidence.",
+      "proposed_owner": "Rohit and procurement",
+      "decision_time": "Before external integration",
+      "status": "Open"
+    },
+    {
+      "id": "Q21",
+      "group": "Supply",
+      "question": "Which AGIBOT model, gripper, sensors, SDK, and control access are available?",
+      "proposed_default": "Keep model and configuration unconfirmed. Do not infer a deployable stack from the vendor name.",
+      "proposed_owner": "AWS and OEM",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q22",
+      "group": "Supply",
+      "question": "Which configuration combinations are supported?",
+      "proposed_default": "Compare only compatible hardware, tools, sensors, software, and interfaces. Mark unverified combinations unknown.",
+      "proposed_owner": "OEM and integrator",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q23",
+      "group": "Supply",
+      "question": "Which specification limits include operating conditions and test methods?",
+      "proposed_default": "Capture the conditions for payload, reach, grip, speed, battery, sensing, and safety-related limits.",
+      "proposed_owner": "OEM and engineering",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q24",
+      "group": "Supply",
+      "question": "Which prices and service terms can be used?",
+      "proposed_default": "Use dated quotes with inclusions. Keep the EUR100,000 robot price as an example until confirmed.",
+      "proposed_owner": "Procurement and finance",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q25",
+      "group": "Supply",
+      "question": "Which solutions require configuration, custom control work, or model training?",
+      "proposed_default": "Ask the OEM/AWS to specify the route for each configuration. Do not assume training from scratch.",
+      "proposed_owner": "AWS, OEM, and integrator",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q26",
+      "group": "Performance",
+      "question": "When can supplier data support an initial process estimate?",
+      "proposed_default": "Permit labelled screening assumptions. Agree the evidence needed before a pilot recommendation.",
+      "proposed_owner": "AWS and engineering",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q27",
+      "group": "Performance",
+      "question": "Is the first physics simulation required, and what question must it resolve?",
+      "proposed_default": "Keep this open. Compare a supplier benchmark, a bench trial, and a physics study against the missing task evidence.",
+      "proposed_owner": "AWS, including Emilio",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q28",
+      "group": "Performance",
+      "question": "When can a task result be reused at another process or site?",
+      "proposed_default": "Define an operating envelope for object, pose, layout, tool, software, and conditions. Check differences before reuse.",
+      "proposed_owner": "AWS and OEM",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q29",
+      "group": "Performance",
+      "question": "Which outputs must a simulation or benchmark provide?",
+      "proposed_default": "Return task times and ranges, first-pass success, retries, failures, recovery, conditions, sample count, and versioned inputs.",
+      "proposed_owner": "AWS and engineering",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q30",
+      "group": "Performance",
+      "question": "What trial sample and error measure are sufficient?",
+      "proposed_default": "Define the success event and variability first. Agree the test design before setting a confidence claim.",
+      "proposed_owner": "AWS and site engineering",
+      "decision_time": "Before site pilot",
+      "status": "Open"
+    },
+    {
+      "id": "Q31",
+      "group": "Scenarios",
+      "question": "What bounds should the search use for fleet sizes and mixed technologies?",
+      "proposed_default": "Expose minimum/maximum counts, compatible task bundles, and shift options. Report the options actually evaluated.",
+      "proposed_owner": "Engineering and AWS",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q32",
+      "group": "Scenarios",
+      "question": "Which peak, downtime, and demand-growth cases must pass?",
+      "proposed_default": "Include agreed normal, peak, failure, and growth cases. Keep them as scenarios unless probabilities are supported.",
+      "proposed_owner": "Operations",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q33",
+      "group": "Scenarios",
+      "question": "How do robots share chargers, buffers, routes, and human support?",
+      "proposed_default": "Use an explicit schedule/resource model. A simple average availability factor is a screening limit.",
+      "proposed_owner": "Site engineering and AWS",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q34",
+      "group": "Scenarios",
+      "question": "Can the tool propose layout or process changes?",
+      "proposed_default": "Yes, as a separate option with its own time, cost, constraints, and evidence. Keep the current method visible.",
+      "proposed_owner": "Radoy and engineering",
+      "decision_time": "Validate flow",
+      "status": "Open"
+    },
+    {
+      "id": "Q35",
+      "group": "Economics",
+      "question": "What part of freed time can create cash savings or avoided hires?",
+      "proposed_default": "Require a shift/staffing plan. Show redeployed capacity separately. Do not multiply task-count coverage by salary.",
+      "proposed_owner": "Operations and finance",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q36",
+      "group": "Economics",
+      "question": "Does EUR75,000 mean annual fully loaded cost per person?",
+      "proposed_default": "Keep it as a user example. Confirm currency, benefits, overtime, agency cost, paid hours, and effective date.",
+      "proposed_owner": "Finance",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q37",
+      "group": "Economics",
+      "question": "Which purchase, lease, or RaaS offers should be compared?",
+      "proposed_default": "Model upfront and recurring costs by line item. Prevent duplicate service and maintenance costs.",
+      "proposed_owner": "Procurement and finance",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q38",
+      "group": "Economics",
+      "question": "Who pays the costs and who retains the benefit under the site contract?",
+      "proposed_default": "Show DP World and customer views where needed. Allocate recovery cost separately from the share of labour benefit retained.",
+      "proposed_owner": "Finance and commercial owner",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q39",
+      "group": "Economics",
+      "question": "What contract term, ramp-up, horizon, and exit costs apply?",
+      "proposed_default": "Use an agreed finite cash-flow period. Test contract end, redeployment, and residual value explicitly.",
+      "proposed_owner": "Commercial owner and finance",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q40",
+      "group": "Economics",
+      "question": "Which payback limit, discount rate, FX date, and financial definitions apply?",
+      "proposed_default": "Call a two-year recovery of investment payback. Define ROI separately. Leave rates unknown until agreed.",
+      "proposed_owner": "Finance and Rohit",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q41",
+      "group": "Economics",
+      "question": "Which quality, capacity, safety, or service gains can be monetised?",
+      "proposed_default": "Show the metric first. Add money only with an agreed method and no double counting. Separate robot value from added platform value.",
+      "proposed_owner": "Operations and finance",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q42",
+      "group": "Confidence",
+      "question": "What event would a confidence percentage describe?",
+      "proposed_default": "Define task success, process SLA success, and positive business case as separate questions with stated conditions and time windows.",
+      "proposed_owner": "Radoy, Rohit, and AWS",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q43",
+      "group": "Confidence",
+      "question": "Can the evidence support a probability, or only a quality rating?",
+      "proposed_default": "Show evidence status and scenario ranges first. Leave probability unavailable until the method is supported and checked.",
+      "proposed_owner": "AWS and analytics",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q44",
+      "group": "Confidence",
+      "question": "How should evidence age, missing conditions, and site differences affect the result?",
+      "proposed_default": "Show specific gaps and transfer limits. Do not hide them inside a weighted score.",
+      "proposed_owner": "Engineering and AWS",
+      "decision_time": "Before local calculations",
+      "status": "Open"
+    },
+    {
+      "id": "Q45",
+      "group": "Confidence",
+      "question": "What evidence permits advance to a benchmark, pilot, or scale-up?",
+      "proposed_default": "Agree a separate evidence requirement for each decision. A strong financial case alone does not prove readiness.",
+      "proposed_owner": "Rohit, site owner, and AWS",
+      "decision_time": "Before site pilot",
+      "status": "Open"
+    },
+    {
+      "id": "Q46",
+      "group": "Deployment",
+      "question": "Who is the accountable integrator from recommendation to site operation?",
+      "proposed_default": "Name one owner for the full delivery path. Split supplier/AWS/DP World duties in the plan.",
+      "proposed_owner": "Rohit and AWS",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q47",
+      "group": "Deployment",
+      "question": "What model/policy or OEM software will run on the humanoid?",
+      "proposed_default": "Ask AWS/OEM to name the supported stack, access, rights, hardware limits, and fallback route.",
+      "proposed_owner": "AWS and OEM",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q48",
+      "group": "Deployment",
+      "question": "Which datasets, labels, simulation assets, and training runs are required?",
+      "proposed_default": "Define them only after choosing the execution route. Link each item to a task, failure case, and test.",
+      "proposed_owner": "AWS and OEM",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q49",
+      "group": "Deployment",
+      "question": "What must pass before loading hardware and starting a site pilot?",
+      "proposed_default": "Specify bench tests, interface tests, operating limits, site readiness, safe stop/recovery, and the accountable site decision.",
+      "proposed_owner": "Site owner, OEM, and integrator",
+      "decision_time": "Before site pilot",
+      "status": "Open"
+    },
+    {
+      "id": "Q50",
+      "group": "Deployment",
+      "question": "Who packages, loads, checks, monitors, and rolls back a release?",
+      "proposed_default": "Assign these duties explicitly. Preserve the previous release and its compatible configuration.",
+      "proposed_owner": "AWS, OEM, and integrator",
+      "decision_time": "Before site pilot",
+      "status": "Open"
+    },
+    {
+      "id": "Q51",
+      "group": "Deployment",
+      "question": "What pilot duration, stop rules, and acceptance measures apply?",
+      "proposed_default": "Agree output, quality, intervention, downtime, human work, cost, and safety-related stop conditions before the trial.",
+      "proposed_owner": "Site owner and Rohit",
+      "decision_time": "Before site pilot",
+      "status": "Open"
+    },
+    {
+      "id": "Q52",
+      "group": "Deployment",
+      "question": "Which WMS/WES/PLC/fleet interfaces are required?",
+      "proposed_default": "Define dispatch, acknowledgement, exception, ownership, retry, and event contracts. Keep the platform separate from real-time machine control.",
+      "proposed_owner": "IT, integrator, and OEM",
+      "decision_time": "Before external integration",
+      "status": "Open"
+    },
+    {
+      "id": "Q53",
+      "group": "Operations",
+      "question": "What counts as a deployed asset and where is its status authoritative?",
+      "proposed_default": "Separate planned, in pilot, in service, paused, and retired. Record site, process, serial/configuration, and release.",
+      "proposed_owner": "Operations and IT",
+      "decision_time": "Before external integration",
+      "status": "Open"
+    },
+    {
+      "id": "Q54",
+      "group": "Operations",
+      "question": "Which telemetry and actual cost data will be available?",
+      "proposed_default": "Start with manual/CSV input. Define denominators, timestamps, and downtime reasons before connecting live feeds.",
+      "proposed_owner": "Operations and OEM",
+      "decision_time": "Before external integration",
+      "status": "Open"
+    },
+    {
+      "id": "Q55",
+      "group": "Operations",
+      "question": "How will field data change task evidence and future recommendations?",
+      "proposed_default": "Review new evidence, record its operating envelope, update versions, and mark affected results out of date.",
+      "proposed_owner": "Engineering and AWS",
+      "decision_time": "AWS technical definition",
+      "status": "Open"
+    },
+    {
+      "id": "Q56",
+      "group": "Operations",
+      "question": "When can a pilot scale to more robots or another site?",
+      "proposed_default": "Use observed performance and a fresh local gap check. Do not copy a site approval automatically.",
+      "proposed_owner": "Site owner and Rohit",
+      "decision_time": "Before scale-up",
+      "status": "Open"
+    },
+    {
+      "id": "Q57",
+      "group": "Mockup and data",
+      "question": "Where must version 2 store cases?",
+      "proposed_default": "Use local persistence plus complete validated export/import first. Add a shared backend only if collaboration needs it.",
+      "proposed_owner": "Radoy",
+      "decision_time": "Before rebuild",
+      "status": "Open"
+    },
+    {
+      "id": "Q58",
+      "group": "Mockup and data",
+      "question": "Which roles need different views or edit rights?",
+      "proposed_default": "Show Executive, Engineer, Site, and Delivery views as demo roles. Treat real login and shared access as a separate implementation choice.",
+      "proposed_owner": "Radoy and Rohit",
+      "decision_time": "Before rebuild",
+      "status": "Open"
+    },
+    {
+      "id": "Q59",
+      "group": "Mockup and data",
+      "question": "Which integrations must be working in the mockup?",
+      "proposed_default": "Implement local records, rules, scenario maths, reports, and observed-data entry. Show CAD, physics, training, and hardware transfer as explicit placeholders.",
+      "proposed_owner": "Radoy",
+      "decision_time": "Validate flow",
+      "status": "Open"
+    }
+  ],
+  "sources": [
+    [
+      "S1",
+      "Current owner request",
+      "18 October 2026; this conversation",
+      "Defines the current design request. Deployment is part of the target platform. Validate the flow before the rebuild."
+    ],
+    [
+      "S2",
+      "Workshop preparation",
+      "Scope.md, lines 9175–9181 and 9280–9343",
+      "Rohit links process and MTM data to partial process augmentation. The input list includes process flows, layout, demand, inventory, and SKU data."
+    ],
+    [
+      "S3",
+      "AWS workshop: business case and inputs",
+      "Scope.md, lines 14438–14545",
+      "The discussion covers contract length, economics, comparisons, training, deployment, layout files, site data, workforce, resources, battery time, constraints, SLAs, and traffic. Several speakers share transcript blocks."
+    ],
+    [
+      "S4",
+      "AWS workshop: performance dispute",
+      "Scope.md, lines 15633–15708",
+      "The discussion separates reusable performance metrics from full physics work for each scenario. The need for the first physics simulation remains disputed. Some speech is duplicated under different names."
+    ],
+    [
+      "S5",
+      "Earlier platform direction",
+      "Scope.md, lines 5693–5795, 6074–6137, and 6239–6260",
+      "Rohit and Radoy describe work split between people and machines, capability records, a business case, deployment, and later improvement."
+    ],
+    [
+      "S6",
+      "Later scope and integration gap",
+      "Scope.md, lines 20200–20239, 20341–20368, and 21015–21186",
+      "The team distinguishes different configurations from repeated runs. The first prototype excludes physical deployment. The later internal discussion identifies a missing role that connects the product goal to technical work."
+    ],
+    [
+      "H1",
+      "Humanoid process model",
+      "Humanoid/SPEC.md:129–166; src/domain/referenceJourney.js:57–305",
+      "Useful hierarchy, task records, skills, measurable capability needs, source records, and exception links. The specification describes intended rules; code and sample data do not prove field capability."
+    ],
+    [
+      "H2",
+      "Humanoid process editor",
+      "Humanoid/src/domain/processAuthoring.js:17–146; processAuthoringState.js:12–50",
+      "Editable process revisions, structural checks, source links, and historical decisions. The current implementation uses session state."
+    ],
+    [
+      "H3",
+      "Humanoid matching limit",
+      "Humanoid/src/profiler/matchingEngine.js:315–379",
+      "A task that passes the checks receives its full fteCount as estimatedAutomatableFte. Building-block coverage is separate. This cannot establish a partial labour saving."
+    ],
+    [
+      "H4",
+      "Humanoid AMR lifecycle",
+      "Humanoid/src/domain/amrLifecycle.js:1–17, 114–166, 169–226",
+      "Useful lifecycle stages, hard physical checks, fleet sizing fields, charging, recovery cost, retained benefit, review records, and an export brief. The calculation is a planning estimate."
+    ],
+    [
+      "H5",
+      "Humanoid navigation and image",
+      "Humanoid/src/App.jsx:29–87; src/modes/WarehouseProfiler.jsx:17–76; output/playwright/amr/desktop-economics.png",
+      "Profiler has three mode buttons and eight tabs. AMR has a separate ten-stage journey. The saved image was inspected. It does not establish the current runtime state."
+    ],
+    [
+      "H6",
+      "Humanoid API boundary",
+      "Humanoid/src/twin/api/twinClient.js:49–109; twinAdapters.js:1–160; backend/README.md",
+      "A client and normalizers exist for the twin API. They are not evidence of a working robot training or physical deployment service. The backend was not run for this design review."
+    ],
+    [
+      "V1",
+      "Hybrid Workforce calculation",
+      "Hybrid_workforce/src-modules/engine.js:92–126, 179–224, 301–324",
+      "The current model uses process-level scores, fixed residual-work assumptions, and a score called confidence that includes economics. Version 2 needs a different calculation contract."
+    ]
+  ],
+  "inputs": [
+    [
+      "Process and method",
+      "Purpose, start/end points, SOP, task tree, atomic actions, dependencies, repeat counts, parallel work, handoffs, tools, exceptions, and recovery.",
+      "A process map that a site engineer can check.",
+      "S1, S2, S5"
+    ],
+    [
+      "Time study",
+      "Observed times, standard times, MTM method and codes if available, sample count, ranges, allowance rules, active time, waiting time, and time shared with other work.",
+      "A human baseline with a stated timing method.",
+      "S1, S2"
+    ],
+    [
+      "Engineering model",
+      "Process rates, material flows, capacity, staffing method, equipment, assumptions, units, and links to source cells or records.",
+      "Reconcile planned staffing with observed work. Keep differences visible.",
+      "S1, S2"
+    ],
+    [
+      "Demand",
+      "Order events, hourly/shift volumes, SKU mix, peaks, seasonality, growth, arrival pattern, cut-off times, inventory, and storage rules where relevant.",
+      "Use the same demand for all compared options.",
+      "S2, S3"
+    ],
+    [
+      "Objects and load",
+      "Tote/part types, dimensions, weight range, grip points, material, deformation, nesting, orientation, contamination, stack rules, and required placement tolerance.",
+      "Test the complete load and handling envelope.",
+      "S1; proposed detail"
+    ],
+    [
+      "Site and layout",
+      "2D CAD, available 3D model, scan, photos/video, distances, aisles, heights, floors, routes, racks, buffers, chargers, power, network, traffic, and shared work zones.",
+      "Store files and mapped dimensions. Mark any manual assumptions.",
+      "S1, S3"
+    ],
+    [
+      "People",
+      "Anonymous roles, headcount by shift, paid and productive hours, breaks, absence cover, skills, intervention duties, fully loaded rates, overtime, agency labour, and minimum staffing.",
+      "Model the work that remains with people.",
+      "S1, S3; proposed detail"
+    ],
+    [
+      "Technology",
+      "Product, hardware version, gripper, sensors, software/policy version, supported skills, measurable limits, interfaces, service needs, battery/charge rules, and available fleet.",
+      "Match a complete configuration to a task under stated conditions.",
+      "S1, S3, H1"
+    ],
+    [
+      "Performance evidence",
+      "Task/configuration, conditions, cycle-time range, first-pass success, retries, failure and recovery, availability definition, source, date, sample count, and transfer limits.",
+      "Select an allowed evidence source for each estimate.",
+      "S1, S4"
+    ],
+    [
+      "Economics and contract",
+      "Purchase/lease/RaaS terms, integration, tools, site change, compute, software, energy, support, maintenance, spares, training, ramp-up, residual value, contract term, benefit owner, currency, and study horizon.",
+      "Show cash flow, cost per unit, and business benefit from a stated viewpoint.",
+      "S1, S3; proposed detail"
+    ],
+    [
+      "Rules and constraints",
+      "Throughput, quality, SLAs, operating windows, ergonomic goals, restricted tasks, site safety needs, interface rules, data permissions, and supplier restrictions.",
+      "Reject a failed hard requirement. Show unknown requirements separately.",
+      "S1, S3"
+    ],
+    [
+      "Pilot and operations",
+      "Test plan, release/configuration records, site readiness, accountable roles, observed throughput, quality, interventions, downtime, charge events, cost, and incidents.",
+      "Compare expected and observed results. Update the next evaluation.",
+      "S1, S3, S5"
+    ]
+  ]
+}

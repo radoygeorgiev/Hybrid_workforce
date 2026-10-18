@@ -1,156 +1,51 @@
-# Application Architecture
+# Version 2 architecture
 
-This local demonstrator is designed around the four-layer DP World hybrid workforce framework. It is also structured to map cleanly to a production architecture with presentation, business logic, data access, and integration layers.
+## Local application
 
-## Layer 1: Business Processes
+The application uses plain JavaScript and CSS. It needs no external package or network resource for its core screens.
 
-Purpose: Standardize DP World's 3PL workflows into process templates that can be evaluated, simulated, and deployed repeatedly.
+- `src-v2/data.js`: sample cases, product envelopes, action records, and delivery review items.
+- `src-v2/engine.js`: fit checks, sequential process screening, team/fleet counts, economics, option generation, stress cases, readiness, and observed-data validation.
+- `src-v2/store.js`: browser persistence, case revisions, import validation, and optional database synchronization.
+- `src-v2/imports.js`: CSV, JSON, and plain-text action intake.
+- `src-v2/views.js`: dashboards, case stages, source records, and an escaped HTML report.
+- `src-v2/app.js`: user actions, dialogs, file transfer, import preview, and report downloads.
+- `src-v2/questions.js`: generated from the design review. Do not edit this generated file directly.
 
-Implemented in this app:
+The build joins these modules inside one scope. This supports a normal local website and a self-contained HTML front end.
 
-- Process library in `src-modules/data.js`
-- Process selection UI in `index.html`
-- Parameter sliders for volume, payload, travel distance, complexity, variability, ergonomics risk, service level, utilization, cloud cost, and integration budget
-- Process workflow steps rendered in the 3D simulation timeline
+## Case path
 
-Production evolution:
+Inputs → Process → Matches → Scenarios → Results → Deployment → Learning.
 
-- Connect to WMS/WES/TMS event logs
-- Build task ontologies for inbound, outbound, picking, packing, returns, cross dock, inspection, and container unloading
-- Maintain versioned process templates by customer, site, SKU class, and automation maturity
+One case contains its baseline, action list, sources, scenarios, decision snapshots, delivery plan, tests, assets, observations, issues, and question answers. Configuration records are shared across cases. A material configuration change increments all case versions. A material case change invalidates previous reviews by version. A calculation change must update `MODEL_VERSION`.
 
-## Layer 2: Capability Library
+## Calculation boundary
 
-Purpose: Translate process requirements into capability requirements rather than selecting robots by brand alone.
+Fit uses a recorded skill, payload, reach, aisle, and task time. The configuration record also holds hardware, tool, software, source, and operating conditions. The screening checks do not prove the full physical operating envelope.
 
-Implemented in this app:
+An option assigns each action to a person or configuration. Resource time includes repeat count, one retry, charging, other downtime, handoffs, and human recovery. The slowest resource limits the process. Staffing uses peak load, productive share, minimum coverage, and annual cover. It is a planning bound, not a labour schedule.
 
-- Capability requirements engine in `src-modules/engine.js`
-- Requirements include lifting, mobility, dexterity, vision, endurance, speed, autonomy, safety, API readiness, and scalability
-- Capability cards update dynamically as process parameters change
+Annual cash benefit uses an explicit cash-benefit position limit and retained-benefit share. Extra human positions are costed in full. Redeployed capacity produces no cash labour benefit. The model separates incremental cash cost from allocated process cost, so extra human cost and purchase capital are each counted once in the relevant measure.
 
-Production evolution:
+A candidate must meet capacity and first-pass quality, have positive annual net cash, recover upfront cash within the study horizon, and have positive NPV at the entered rate. Missing inputs and failed capacity/quality cannot produce a savings or payback claim. Best means best NPV in the tested set, subject to the stated assumptions.
 
-- Maintain a governed capability taxonomy
-- Add test-protocol results from pilots
-- Store robot performance under DP World operating conditions
-- Use safety and compliance constraints as hard filters before economic scoring
+## Local service
 
-## Layer 3: OEM Marketplace
+`server.py` uses Python's HTTP server and SQLite. It binds to loopback and rejects unknown hosts and cross-origin writes.
 
-Purpose: Compare certified robotics OEMs in a vendor-neutral marketplace and avoid lock-in.
+| Route | Function |
+|---|---|
+| `GET /api/health` | Service and connection state |
+| `GET /api/workspace` | Saved JSON workspace and database version |
+| `PUT /api/workspace` | Validated save with a version check; stale writes return 409 |
+| `POST /api/files?name=...` | Store a source file under a generated ID; limit 25 MB |
+| `GET /api/files/<id>` | Download the stored source file |
 
-Implemented in this app:
+Private dot paths and directory listings are blocked. Source files download as attachments. The server does not parse CAD or execute uploaded content. It has no login, enterprise access model, or public hosting configuration.
 
-- OEM library in `src-modules/data.js`
-- Matching algorithm in `src-modules/engine.js`
-- OEM Marketplace table with rank, technology, payload, endurance, speed, deployment options, match score, maturity, and notes
-- Includes humanoids plus specialist warehouse robotics as guardrails
+## External service boundaries
 
-Production evolution:
+CAD/environment, process/physics, training/policy, and hardware-transfer adapters are planning records. Their buttons export a versioned request. No external job, policy training, hardware transfer, or real-time robot control is performed.
 
-- OEM certification workflow
-- Standard API contracts for telemetry, tasking, health, safety events, and software versioning
-- SLA and commercial model repository
-- Vendor scorecards from real DP World pilots
-
-## Layer 4: Hybrid Workforce Platform
-
-Purpose: Orchestrate simulation, fleet management, scheduling, AI guidance, task allocation, analytics, maintenance, software updates, safety, security, and knowledge management.
-
-Implemented in this app:
-
-- KPI cockpit in `src-modules/app.js`
-- Simulation engine in `src-modules/simulation3d.js`
-- ROI and fleet sizing logic in `src-modules/engine.js`
-- Conversational AI advisor in `src-modules/assistant.js`
-- Local scenario export/import
-
-Production evolution:
-
-- AWS digital twin layer
-- Edge gateways in warehouses
-- Real-time telemetry from robots and automation equipment
-- Integration with WMS/WES/TMS/ERP/HR systems
-- AI assistant connected to governed knowledge and operational data
-- Fleet scheduler and task allocator
-- Cybersecurity, identity, audit, and governance services
-
-## Mapping to software architecture layers
-
-### Presentation layer
-
-Files:
-
-- `index.html`
-- `css/styles.css`
-- UI rendering parts of `src-modules/app.js`
-
-Responsibilities:
-
-- Executive cockpit
-- Forms and sliders
-- 3D simulation canvas
-- OEM marketplace
-- AI chat interface
-- Architecture view
-
-### Business logic layer
-
-Files:
-
-- `src-modules/engine.js`
-- `src-modules/assistant.js`
-
-Responsibilities:
-
-- Matching algorithm
-- Capability scoring
-- ROI calculation
-- Fleet sizing
-- Payback and NPV
-- Guardrail generation
-- Offline advisor responses
-
-### Data access layer
-
-Files:
-
-- `src-modules/data.js`
-- Browser local storage
-- JSON import/export
-
-Responsibilities:
-
-- Process library
-- Region assumptions
-- Robot capability library
-- Scenario state
-
-### Integration layer
-
-Files:
-
-- `server.py` for local hosting
-- Integration architecture represented in the app but not connected to external systems
-
-Production responsibilities:
-
-- WMS/WES/TMS/ERP connectors
-- OEM API gateway
-- AWS IoT and digital twin services
-- Enterprise identity and audit
-- Data lake and analytics
-- Enterprise LLM gateway
-
-## Production reference architecture
-
-A production version should use a modern cloud-native architecture:
-
-- Front end: React, Next.js, or Angular
-- API layer: Python FastAPI, Node.js, or Java/Spring Boot
-- Data: PostgreSQL for process and capability master data, time-series store for robot telemetry, object storage for simulation artifacts
-- Simulation: warehouse digital twin service and event-based simulation engine
-- AI: enterprise LLM gateway with retrieval from approved DP World knowledge sources
-- Integration: API gateway, message bus, WMS/WES/TMS/ERP connectors, OEM connectors
-- Security: SSO, RBAC, audit, secrets management, network segmentation, and device identity
+The site and OEM must supply actual operating evidence and make the real pilot decision. The prototype always returns `productionAuthorized: false`.

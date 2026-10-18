@@ -1,57 +1,271 @@
+"""Serve the local prototype and persist its workspace in SQLite."""
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs, quote
 import argparse
-import socket
+import json
+import math
+import re
+import sqlite3
+import uuid
 import webbrowser
+from contextlib import contextmanager
 
 ROOT = Path(__file__).resolve().parent
-
-class Handler(SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(ROOT), **kwargs)
-
-    def end_headers(self):
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        super().end_headers()
-
-    def log_message(self, format, *args):
-        # Keep terminal readable for business users while still showing important startup information.
-        return
+MAX_WORKSPACE = 10_000_000
+MAX_FILE = 25_000_000
 
 
-def is_port_available(port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+def validate_workspace(value):
+    if not isinstance(value, dict) or value.get("schemaVersion") != 2:
+        raise ValueError("Use a version 2 workspace.")
+    cases, configs = value.get("cases"), value.get("configs")
+    if not isinstance(cases, list) or not 1 <= len(cases) <= 200 or not isinstance(configs, list) or not 1 <= len(configs) <= 500:
+        raise ValueError("The case or configuration list is invalid.")
+    for group in (cases, configs):
+        if any(not isinstance(x, dict) or not isinstance(x.get("id"), str) or not x["id"] for x in group):
+            raise ValueError("Each record needs an identifier.")
+        if len({x["id"] for x in group}) != len(group):
+            raise ValueError("Record identifiers must be unique.")
+    config_ids = {x["id"] for x in configs}
+    for c in cases:
+        if not all(isinstance(c.get(key), dict) for key in ("baseline", "economics", "deployment")) or not all(isinstance(c.get(key), list) for key in ("actions", "scenarios", "sources", "observations")):
+            raise ValueError("A case is incomplete.")
+        if len(c["actions"]) > 500 or not c["scenarios"] or len(c["scenarios"]) > 500 or len(c["observations"]) > 10000:
+            raise ValueError("A case exceeds the local record limit.")
+        for group in (c["baseline"], c["economics"]):
+            if any(type(n) in (int, float) and (not math.isfinite(n) or n < 0) for n in group.values()):
+                raise ValueError("Planning numbers must be non-negative or unknown.")
+        ids = {a.get("id") for a in c["actions"] if isinstance(a, dict)}
+        if len(ids) != len(c["actions"]) or None in ids:
+            raise ValueError("Action identifiers must be unique.")
+        for a in c["actions"]:
+            for key in ("seconds", "frequency", "payloadKg", "reachM", "aisleM"):
+                n = a.get(key)
+                if n is not None and (type(n) not in (int, float) or not math.isfinite(n) or n < 0):
+                    raise ValueError("Action numbers must be non-negative or unknown.")
+        for s in c["scenarios"]:
+            if not isinstance(s, dict) or not isinstance(s.get("assignments"), dict) or not isinstance(s.get("counts"), dict):
+                raise ValueError("A scenario is incomplete.")
+            if any(key not in ids or actor != "human" and actor not in config_ids for key, actor in s["assignments"].items()):
+                raise ValueError("An assignment has a missing action or configuration.")
+            if any(key not in config_ids or type(count) is not int or not 0 <= count <= 100 for key, count in s["counts"].items()):
+                raise ValueError("A fleet count is invalid.")
+    # JSON has no NaN or infinity. Reject them at every nesting level.
+    json.dumps(value, allow_nan=False)
+    return value
+
+
+class Database:
+    def __init__(self, path):
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.connect() as db:
+            db.execute("CREATE TABLE IF NOT EXISTS workspace (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL, version INTEGER NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS files (id TEXT PRIMARY KEY, name TEXT NOT NULL, size INTEGER NOT NULL)")
+
+    @contextmanager
+    def connect(self):
+        connection = sqlite3.connect(self.path, timeout=10)
         try:
-            sock.bind(("127.0.0.1", port))
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
+    def read(self):
+        with self.connect() as db:
+            row = db.execute("SELECT payload,version FROM workspace WHERE id=1").fetchone()
+        return {"workspace": json.loads(row[0]) if row else None, "version": row[1] if row else 0}
+
+    def save(self, workspace, version):
+        validate_workspace(workspace)
+        if type(version) is not int or version < 0:
+            raise ValueError("The database version is invalid.")
+        payload = json.dumps(workspace, allow_nan=False, ensure_ascii=False)
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT version FROM workspace WHERE id=1").fetchone()
+            current = row[0] if row else 0
+            if version != current:
+                return None
+            next_version = current + 1
+            db.execute("INSERT INTO workspace(id,payload,version) VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,version=excluded.version", (payload, next_version))
+        return next_version
+
+
+def make_handler(data_dir=None, root=ROOT):
+    root = Path(root).resolve()
+    data_dir = Path(data_dir or root / ".data").resolve()
+    db = Database(data_dir / "workspace.sqlite3")
+    file_dir = data_dir / "files"
+    file_dir.mkdir(parents=True, exist_ok=True)
+
+    class Handler(SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(root), **kwargs)
+
+        def setup(self):
+            super().setup()
+            self.connection.settimeout(15)
+
+        def reject_write_origin(self):
+            # Consume a bounded request before closing, so Windows can deliver the error response.
+            try:
+                self.read_body(MAX_WORKSPACE)
+            except (ValueError, OSError):
+                pass
+            return self.json_response({"error": "Cross-origin writes are not accepted."}, 403)
+
+        def end_headers(self):
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "same-origin")
+            super().end_headers()
+
+        def log_message(self, *args):
+            pass
+
+        def origin_allowed(self):
+            host = self.headers.get("Host", "").lower()
+            allowed = {f"127.0.0.1:{self.server.server_port}", f"localhost:{self.server.server_port}"}
+            if host not in allowed:
+                return False
+            origin = self.headers.get("Origin")
+            if origin:
+                parsed = urlparse(origin)
+                if parsed.scheme != "http" or parsed.netloc.lower() not in allowed:
+                    return False
             return True
+
+        def json_response(self, value, status=200):
+            body = json.dumps(value, ensure_ascii=False, allow_nan=False).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                pass
+
+        def read_body(self, limit):
+            try:
+                size = int(self.headers.get("Content-Length", "-1"))
+            except ValueError:
+                raise ValueError("The content length is invalid.")
+            if not 0 <= size <= limit:
+                raise ValueError("The request is too large or has no content length.")
+            body = self.rfile.read(size)
+            if len(body) != size:
+                raise ValueError("The file transfer is incomplete.")
+            return body
+
+        def do_GET(self):
+            if not self.origin_allowed():
+                return self.json_response({"error": "This service accepts same-origin loopback requests only."}, 403)
+            path = urlparse(self.path).path
+            if path == "/api/workspace":
+                return self.json_response(db.read())
+            if path == "/api/health":
+                return self.json_response({"status": "ok", "storage": "SQLite", "schemaVersion": 2, "externalRobotics": "Not connected"})
+            if path.startswith("/api/files/"):
+                file_id = path.rsplit("/", 1)[-1]
+                if not re.fullmatch(r"[a-f0-9]{32}", file_id):
+                    return self.json_response({"error": "The file identifier is invalid."}, 400)
+                with db.connect() as connection:
+                    row = connection.execute("SELECT name,size FROM files WHERE id=?", (file_id,)).fetchone()
+                target = file_dir / file_id
+                if not row or not target.is_file():
+                    return self.json_response({"error": "The file was not found."}, 404)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Disposition", "attachment; filename*=UTF-8''" + quote(row[0]))
+                self.send_header("Content-Length", str(target.stat().st_size))
+                self.end_headers()
+                with target.open("rb") as stream:
+                    while chunk := stream.read(65536):
+                        self.wfile.write(chunk)
+                return
+            if path.startswith("/api/"):
+                return self.json_response({"error": "The local service was not found."}, 404)
+            return super().do_GET()
+
+        def translate_path(self, path):
+            target = Path(super().translate_path(path)).resolve()
+            try:
+                relative = target.relative_to(root)
+            except ValueError:
+                return str(root / "__blocked__")
+            if any(part.startswith(".") for part in relative.parts):
+                return str(root / "__blocked__")
+            return str(target)
+
+        def list_directory(self, path):
+            self.send_error(403, "Directory listing is disabled.")
+            return None
+
+        def do_PUT(self):
+            if not self.origin_allowed():
+                return self.reject_write_origin()
+            if urlparse(self.path).path != "/api/workspace":
+                return self.json_response({"error": "The local service was not found."}, 404)
+            try:
+                value = json.loads(self.read_body(MAX_WORKSPACE).decode("utf-8"), parse_constant=lambda s: (_ for _ in ()).throw(ValueError("Non-finite numbers are not valid JSON.")))
+                version = db.save(value["workspace"], value["version"])
+                if version is None:
+                    return self.json_response({"error": "A newer workspace exists. Preserve your local copy before reloading."}, 409)
+                return self.json_response({"version": version})
+            except (ValueError, KeyError, TypeError, UnicodeError) as error:
+                return self.json_response({"error": str(error)}, 400)
+
+        def do_POST(self):
+            if not self.origin_allowed():
+                return self.reject_write_origin()
+            if urlparse(self.path).path != "/api/files":
+                return self.json_response({"error": "The local service was not found."}, 404)
+            try:
+                name = parse_qs(urlparse(self.path).query).get("name", ["source-file"])[0]
+                name = re.split(r"[/\\]", name)[-1].replace("\x00", "")[:200] or "source-file"
+                content = self.read_body(MAX_FILE)
+                file_id = uuid.uuid4().hex
+                (file_dir / file_id).write_bytes(content)
+                with db.connect() as connection:
+                    connection.execute("INSERT INTO files(id,name,size) VALUES(?,?,?)", (file_id, name, len(content)))
+                return self.json_response({"id": file_id, "name": name, "size": len(content)}, 201)
+            except (ValueError, OSError) as error:
+                return self.json_response({"error": str(error)}, 400)
+
+    return Handler
+
+
+def start_server(port=8080, open_browser=False, data_dir=None):
+    handler = make_handler(data_dir)
+    for candidate in range(port, min(port + 30, 65536)):
+        try:
+            server = ThreadingHTTPServer(("127.0.0.1", candidate), handler)
         except OSError:
-            return False
-
-
-def start_server(port: int, open_browser: bool = False):
-    for candidate in range(port, port + 30):
-        if not is_port_available(candidate):
             continue
-        server = ThreadingHTTPServer(("127.0.0.1", candidate), Handler)
         url = f"http://127.0.0.1:{candidate}/index.html"
-        print("DP World Hybrid Workforce Platform", flush=True)
-        print(f"Running locally at: {url}", flush=True)
-        print("Press Ctrl+C to stop.", flush=True)
+        print("Hybrid Workforce - Version 2", flush=True)
+        print(f"Open: {url}", flush=True)
+        print("Local SQLite storage is in .data/. Press Ctrl+C to stop.", flush=True)
         if open_browser:
             webbrowser.open(url)
         server.serve_forever()
         return
-    raise RuntimeError(f"No available local port between {port} and {port + 29}.")
+    raise RuntimeError("No local port is available.")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run the local DP World Hybrid Workforce Platform.")
-    parser.add_argument("--port", type=int, default=8080, help="Preferred local port. Default: 8080")
-    parser.add_argument("--open", action="store_true", help="Open the app in the default browser after starting.")
+    parser = argparse.ArgumentParser(description="Run the local Hybrid Workforce prototype.")
+    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--open", action="store_true")
+    parser.add_argument("--data-dir", default=None)
     args = parser.parse_args()
+    if not 1 <= args.port <= 65535:
+        parser.error("Use a port from 1 to 65535.")
     try:
-        start_server(args.port, args.open)
+        start_server(args.port, args.open, args.data_dir)
     except KeyboardInterrupt:
-        print("\nServer stopped.", flush=True)
+        print("\nServer stopped.")

@@ -1,0 +1,53 @@
+﻿id,function,prototype_mode,remaining_boundary
+F01,Executive view,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F02,Evaluation pipeline,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F03,Deployment view,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F04,Initiative record,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F05,Case stages,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F06,Input register,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F07,Structured import,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F08,File intake,Local function with stated limits,Files are stored and mapped by hand. CAD/video/model interpretation is not connected.
+F09,Baseline check,Local function with stated limits,"Compares action-time capacity, staffing, demand, and entered observed rate. Spreadsheet inputs are mapped by hand."
+F10,Process editor,Local function with stated limits,"Groups, actions, dependencies, repetitions, and parallel-work records. No branch or shared-resource scheduling engine."
+F11,Action record,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F12,Human baseline,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F13,Layout context,Local function with stated limits,Sample annotated 2D context and editable route distance. No geometry editor or CAD conversion.
+F14,Needs per action,Local function with stated limits,"Skill, payload, reach, aisle, task time, and quality checks. Other operating conditions need engineering evidence."
+F15,Technology library,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F16,Configuration record,Local function with stated limits,Versioned configuration and source fields. OEM compatibility must be confirmed.
+F17,Capability and source record,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F18,Commercial terms,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F19,Action-to-product matrix,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F20,Partial augmentation,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F21,Work bundle checks,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F22,Alternative methods,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F23,Hybrid process editor,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F24,Performance basis,Local function with stated limits,Configuration skill times and stated conditions. No external performance run.
+F25,Evidence request,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F26,Fleet and team search,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F27,Capacity and availability,Local function with stated limits,"Sequential screening calculation. No traffic, queue, charger schedule, collision, or safety simulation."
+F28,Scenario stress test,Local function with stated limits,Seven named stress cases. No probability distribution or calibrated confidence.
+F29,Process evaluation results,Local function with stated limits,Process rate and workload/bottleneck estimate. Queues and spatial effects need an external model.
+F30,Staffing and benefit bridge,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F31,Full cost model,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F32,Commercial models,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F33,Business case,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F34,Contract and viewpoint,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F35,Candidate comparison,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F36,Evidence and uncertainty,Local function with stated limits,"Separate evidence, fit, stress, and readiness. Probability remains unavailable."
+F37,Recommendation report,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F38,Recorded decision,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F39,Deployment plan,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F40,Execution route,Planning / external integration,Execution-route planning. No OEM commissioning call.
+F41,Data and training plan,Planning / external integration,Data/training plan and request export. No model training.
+F42,Release record,Planning / external integration,Local release/rollback record. No signed binary or vendor package registry.
+F43,Site readiness and tests,Planning / external integration,Local review checklist and test records. No site safety certification.
+F44,Pilot plan and review,Planning / external integration,Pilot planning and local review. No real pilot authority.
+F45,Hardware transfer,Planning / external integration,Hardware-transfer request only. No hardware loading.
+F46,Asset and release register,Local function with stated limits,Entered asset status and release records. No live asset connection.
+F47,Observed results,Local function with stated limits,Manual/CSV observations. No telemetry feed.
+F48,Expected versus observed,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F49,Improve and scale,Local function with stated limits,"Issue, revision, test, and scale-up planning. No automatic hardware change."
+F50,Case data and versioning,Local function with stated limits,Browser/SQLite and complete editable record export. File bytes require a .data backup.
+F51,Plain language and units,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
+F52,Integration boundaries,Planning / external integration,Four explicit request contracts. External adapters are not connected.

@@ -1,0 +1,21 @@
+flowchart TD
+  D[Demand: process, actions, MTM, layout, demand, people, costs]
+  S[Supply: products, configurations, capabilities, performance evidence, prices]
+  D --> B[Check the baseline and action requirements]
+  S --> C[Check configuration limits and evidence]
+  B --> M[Match actions to products: supported, blocked, unknown]
+  C --> M
+  M --> H[Design options: current method, improved manual work, hybrid teams]
+  M --> E[Close evidence gaps: benchmark, simulation, or field test]
+  E --> C
+  H --> P[Evaluate the whole process and fleet: people, handoffs, charge, failures, peaks]
+  P --> F[Calculate cost, cash savings, payback, and sensitivity]
+  F --> R[Compare options and recommend: proceed, test, change, defer, or stop]
+  R --> A{Owner decision}
+  A -->|Revise or collect data| D
+  A -->|Proceed| L[Prepare deployment: configure or train as required, test, pilot]
+  A -->|Defer or stop| X[Retain the case and reason]
+  L --> O[Operate: measure output, cost, failures, and human work]
+  O --> I[Improve the process, model, configuration, and business case]
+  I --> B
+  I --> C

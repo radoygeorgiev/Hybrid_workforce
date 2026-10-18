@@ -1,11 +1,13 @@
 {
   "name": "dpworld-hybrid-workforce-platform-app",
-  "version": "2.0.0",
+  "version": "2.0.0-vision.1",
   "private": true,
-  "description": "Offline DP World Hybrid Workforce Platform demonstrator with process configuration, hybrid robotics matching, 3D simulation, and ROI model.",
+  "type": "module",
+  "description": "Local hybrid workforce planning prototype: actions, technology matching, economics, delivery, and field learning.",
   "scripts": {
-    "start": "python3 server.py --port 8080 --open",
-    "build": "python3 build-bundle.py && python3 build-standalone.py"
+    "start": "python server.py --port 8080",
+    "build": "python build-bundle.py && python build-standalone.py",
+    "test": "node --test tests/*.test.js"
   },
   "dependencies": {}
 }

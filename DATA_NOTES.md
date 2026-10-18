@@ -1,95 +1,22 @@
-# Data Notes and Assumptions
+# Data and calculation notes
 
-Created for strategic simulation and executive demonstration. This is not a procurement database.
+- All supplied sites, action times, cost figures, product envelopes, assets, and observations are examples unless the user supplies evidence.
+- The AGIBOT target has unknown physical and task performance. It cannot qualify through a price or a vendor name.
+- A new text action list has unknown timing, skill, and physical requirements. The app does not infer robot performance from prose.
+- Human time is active work per action × repeat count. Parallel work needs a separate resource model.
+- Daily demand covers all shifts. Peak demand is used for capacity. The peak factor does not inflate annual demand.
+- Charging and other downtime are disjoint shares of the same operating window.
+- One retry is modelled per machine work bundle. Remaining failure and extra intervention events add human recovery time. Recovery is assumed to complete the outstanding unit; test this at the site.
+- Whole-shift staffing is conservative. Shared roles, time fragments, arrival patterns, queues, and schedules can change the result.
+- Cashable positions are capped at the modelled staffing change. A time fraction is not a staff reduction. Redeployed capacity is separate from cash benefit.
+- Extra staffing is an added cost. Benefit retention does not remove recovery work or added labour cost.
+- Purchase capital is paid upfront. It is not charged again as depreciation in cash flow. Allocated cost per unit spreads upfront cost over the study horizon.
+- Lease/RaaS fees include service only when that inclusion is recorded. Energy and additional site support remain separate.
+- The first year delays benefit for the entered ramp-up period. Payback follows monthly cash flow, including the ramp months. Recurring costs run for the full year. Taxes and financing are not modelled.
+- NPV discounts annual cash flows at year end, using the entered scenario rate. The sample rate is not an approved finance policy.
+- The recommendation ranks the tested set by NPV. Generated matches use eligible action times to form drafts; they are not a global assignment optimizer.
+- A share of passing stress cases is not a confidence probability. Source status, fit, financial sensitivity, and delivery readiness remain separate.
+- Measured observation cost delta needs a comparable baseline cost for the same output and time window. The app does not annualise that delta.
+- Local JSON export preserves editable records and references. File bytes remain in the local server's `.data` directory.
 
-## What the app models
-
-The application estimates whether a 3PL process is a good candidate for hybrid robotic-assisted deployment. It models:
-
-- Volume per shift
-- Shift length
-- Fully loaded labor cost by region
-- Process complexity
-- SKU and task variability
-- Average payload
-- Travel distance
-- Ergonomics risk
-- Target service level
-- Human and robot utilization
-- Cloud/platform support cost
-- Startup integration cost
-- Robot capability fit
-- Robot commercial maturity
-- CapEx-light deployment model
-
-## How to interpret robot data
-
-The robot capability library combines public information, domain assumptions, and conservative planning estimates. Many humanoid vendors do not publish complete, stable, or directly comparable specifications for payload, endurance, speed, pricing, API readiness, service economics, and warehouse maturity.
-
-The values in `src-modules/data.js` should therefore be treated as placeholders. They should be replaced by:
-
-- OEM RFQ/RFP responses
-- DP World pilot results
-- Actual site measurements
-- Safety validation results
-- WMS/WES transaction data
-- Maintenance and uptime data
-- Contracted RaaS/lease/purchase pricing
-- Cybersecurity and API validation
-
-## Why the app includes specialist robots
-
-The strategy should not force every process into a humanoid answer. Some 3PL workflows, such as container unloading or high-rate palletizing, may be better served by specialist warehouse robots or fixed automation. The app includes specialist options to demonstrate this guardrail.
-
-## Public reference sources used for calibration
-
-The following sources informed the model direction and data ranges. Final procurement work should verify all values directly with each OEM.
-
-- Agility Robotics Digit spec page: https://www.agilityrobotics.com/solutions/digit/spec-sheet
-- Apptronik Apollo official page: https://apptronik.com/jerome/apollo
-- Unitree G1 official page: https://www.unitree.com/g1/
-- Fourier GR-1 official page: https://www.fftai.com/products-gr1
-- Sanctuary AI Phoenix announcement: https://sanctuary.ai/news/sanctuary-ai-unveils-phoenix-a-humanoid-general-purpose-robot-designed-for-work/
-- UBTECH Walker S official page: https://www.ubtrobot.com/en/humanoid/products/walker-s
-- Boston Dynamics Stretch official page: https://bostondynamics.com/products/stretch/
-- AWS IoT TwinMaker: https://aws.amazon.com/iot-twinmaker/
-- AWS warehouse simulation and digital twin blog: https://aws.amazon.com/blogs/supply-chain/aws-simulation-and-digital-twin-to-increase-warehouse-productivity/
-
-## Financial assumptions
-
-The application uses a planning model, not an accounting model:
-
-- 250 working days per year
-- Fully loaded labor cost is hourly wage multiplied by burden factor
-- RaaS and lease estimates are illustrative
-- Purchase model amortizes hardware over 60 months plus service reserve
-- Startup integration is treated as upfront cost
-- 3-year NPV uses a simple 10 percent discount rate
-
-For executive review, replace these with DP World finance-approved assumptions by region, customer, and site.
-
-## Technical assumptions
-
-The app assumes a production platform would integrate with:
-
-- WMS and WES for tasks, inventory, and transaction confirmation
-- TMS for outbound and transport planning
-- ERP and finance systems for cost and asset data
-- HR/workforce systems for labor baseline and availability
-- OEM APIs for robot tasking, telemetry, health, safety, and maintenance
-- AWS or equivalent cloud services for digital twin, data, AI, edge, monitoring, security, and analytics
-
-## Safety assumptions
-
-Any real deployment must include local safety review before physical testing:
-
-- Site risk assessment
-- Mixed human/robot traffic rules
-- Emergency stop and safe-stop behavior
-- Speed and separation monitoring
-- Payload and lifting limitations
-- Battery and charging safety
-- Cybersecurity review
-- Incident reporting
-- Operator training
-- Regulatory and insurance review
+Use real process records, valid supplier quotes, applicable task tests, and site engineering review before a capital or pilot decision.

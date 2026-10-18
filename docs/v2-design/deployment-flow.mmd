@@ -1,0 +1,16 @@
+flowchart TD
+  A[Selected scenario and recorded decision] --> P[Plan site, interfaces, resources, tests, and support]
+  P --> R{Which execution route is required?}
+  R --> C[Configure OEM software, tools, and workflow]
+  R --> T[Prepare data and adapt or train a policy/model]
+  C --> V[Create a release record and test the supported configuration]
+  T --> V
+  V --> G{Ready for a supervised site pilot?}
+  G -->|No| P
+  G -->|Yes| H[Load and check supported hardware; run the supervised pilot]
+  H --> M[Measure throughput, quality, interventions, cost, and remaining human work]
+  M --> D{Review the result}
+  D -->|Change| P
+  D -->|Stop or roll back| S[Return to the agreed fallback]
+  D -->|Accept| O[Operate and prepare scale-up]
+  O --> M

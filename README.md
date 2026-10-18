@@ -1,81 +1,64 @@
-# DP World Hybrid Workforce Platform
+# Hybrid Workforce · Version 2
 
-Local/offline demonstrator for DP World Contract Logistics. The application shows how a hybrid workforce of humans, AMRs, robotic forklifts, robotic arms, vision systems, warehouse-specialist robots, and humanoids can be evaluated process-by-process before deployment.
+This local prototype helps a warehouse define work, match actions to technology, compare people and machine teams, check economics, and prepare site delivery.
 
-## Fastest demo path
+The branch is `ämbition-vision`. Git does not permit spaces in branch names.
 
-Open:
+## Run the prototype
 
-```text
-standalone.html
-```
-
-This file contains the CSS, JavaScript, and DP World logo inline and is intended for the lowest-friction executive demo.
-
-## Recommended local hosting path
-
-```bash
-python3 server.py --port 8080 --open
-```
-
-Then open the printed local URL, usually:
+Use Python 3.10 or later:
 
 ```text
-http://127.0.0.1:8080/index.html
+python server.py --port 8080
 ```
 
-On Mac/Linux you can also run:
+Open the URL printed in the terminal. The server binds to `127.0.0.1` only. If the port is busy, it tries the next available local port.
 
-```bash
-./start-local.sh
-```
+On Windows, `start-local.bat` also starts the server. The file `standalone.html` provides the same front end without a server. It stores records in the browser. The SQLite and source-file services require `server.py`.
 
-On Windows:
+## First walkthrough
 
-```bat
-start-local.bat
-```
+1. Open **Evaluations** and select **Empty tote sorting**.
+2. In **Inputs**, inspect the calendar, staffing, sources, and cost assumptions.
+3. In **Process**, edit the actions, timing method, requirements, and recovery work. Import CSV/JSON or paste an action list if needed.
+4. In **Matches**, inspect a fit result. Assign work or select **Generate matched options**.
+5. In **Scenarios**, compare the complete team and fleet. Use **Compare fleet counts** to test counts from one to six per configuration.
+6. In **Results**, check the time/staff/cash bridge, cash flow, adverse scenarios, and evidence. Export a report or record a planning decision.
+7. In **Deployment**, prepare the execution route, release, site, tests, pilot, and intended assets. External service buttons download a request; they do not run a job.
+8. In **Learning**, add or import observations, compare the result, and open an improvement issue.
 
-## What changed in this enhanced version
+**Executive** shows the portfolio. **Deployments** shows site and asset records. **Technology library** contains editable configurations. **Evidence & questions** contains sources and the 59 design questions.
 
-- Title changed to **Hybrid Workforce Platform**.
-- Added a wider set of 3PL processes, including inbound receiving, putaway, case picking, piece picking, goods-to-person replenishment, packing QC, cross-dock, container unloading, truck loading, palletizing, pallet movement, inventory count, returns, kitting/VAS, sorter induction, and yard/dock inspection.
-- Added a **custom process flow builder**.
-- Added upload support for engineering models, process flows, layout files, material-flow CSVs, and simple JSON/TXT/CSV step lists.
-- Expanded process parameters by process type: demand, payload, travel, complexity, variability, exceptions, layout readiness, WMS/WES integration, process standardization, dock utilization, pallet height, fragility, and safety criticality.
-- Reworked Executive Cockpit charts for better spacing and a right-side legend on Operating Performance.
-- Upgraded the 3D simulation to a darker, more professional **Omniverse-inspired digital twin style** with realistic warehouse assets, racks, docks, trucks, conveyors, human avatar, robot avatar, AMR/forklift/arm rendering, telemetry, and workflow timeline.
-- Expanded OEM marketplace beyond humanoids to include AMRs, robotic forklifts, robotic arms, vision/scan/drone systems, and warehouse-specialist robots.
-- Added a recommended hybrid automation mix rather than forcing every process into a humanoid solution.
+## Data and assumptions
 
-## Important limitation
+The supplied cases, product envelopes, prices, and performance figures are sample inputs. The AGIBOT target has no confirmed model or supported performance record. The actual automotive site name remains pending. Parts kitting and pallet transport are separate examples.
 
-The 3D module is an offline canvas-based visualization inspired by modern digital twin tools. It is **not** NVIDIA Omniverse, Unity, Unreal, or a physics-accurate simulator. A production version should connect the process model to CAD/BIM/layout files, WMS/WES transaction data, safety rules, and a true 3D/physics simulation environment.
+The example annual human cost is EUR75,000. It is not a verified site rate. The model separates action-time coverage, staffing change, captured cash benefit, extra staffing cost, and costs passed through the contract.
 
-## File structure
+The capacity model is a screening calculation. It checks sequential resource workload, peak demand, charge, other downtime, one retry, human recovery, and whole-shift staffing. It does not simulate traffic, queues, charger schedules, physical motion, or site safety. Recorded parallel work stops the local evaluation and requests a more detailed model.
+
+There is no calibrated confidence probability. Fit, evidence, economic stress results, and readiness are separate.
+
+## Save and back up
+
+- Browser records use the key `hybrid-workforce-v2`.
+- The local server stores the workspace in `.data/workspace.sqlite3` and source files in `.data/files/`.
+- Export the whole workspace or one editable case as JSON.
+- Imports have a preview. Importing records requires a new review of previous decisions and tests.
+- JSON exports contain file references, not the source-file bytes. Back up the complete `.data` folder to preserve attached files. Stop the server before a filesystem backup.
+- The service uses version checks to prevent a stale browser from overwriting a newer save. It is a local prototype, not a shared multi-user service.
+
+## Build and check
+
+No package download is required. Node.js 20 or later is used for tests.
 
 ```text
-dpworld-hybrid-workforce-platform-app/
-  index.html
-  standalone.html
-  server.py
-  start-local.sh
-  start-local.bat
-  css/styles.css
-  js/app.bundle.js
-  src-modules/
-    app.js
-    assistant.js
-    data.js
-    engine.js
-    simulation3d.js
-  assets/dp-world-logo.jpg
-  ARCHITECTURE.md
-  DATA_NOTES.md
-  LOCAL_DEPLOYMENT_FIX_NOTES.md
-  CHANGELOG.md
+python build-bundle.py
+python build-standalone.py
+node --test tests/engine.test.js
+python -m unittest discover -s tests -p "test_*.py"
 ```
 
-## Data note
+`src-v2/` is the active application. `js/app.bundle.js` and `standalone.html` are generated files. The old `src-modules/` implementation is retained for reference and is excluded from the version 2 build.
 
-All robot costs, performance scores, and commercial models are planning assumptions for executive simulation. Replace them with OEM responses, DP World site data, safety validation, and procurement-approved values before using this for capital or contract decisions.
+See [STATUS.md](STATUS.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [the design basis](docs/v2-design/design-review.html).
