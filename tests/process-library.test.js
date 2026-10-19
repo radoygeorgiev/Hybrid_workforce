@@ -108,10 +108,21 @@ test('visual process library renders every process with flow nodes and expandabl
   const w=seedWorkspace(),c=w.cases[0];
   for(const t of PROCESS_LIBRARY){
     const html=renderApp({w,c,view:'processes',libraryId:t.id,processArea:t.area,questions:[],role:'Engineer view',saveStatus:'Local'});
-    assert.ok(html.includes('data-action="focus-process-activity"'),t.id);
-    assert.equal((html.match(/class="activity-breakdown"/g)||[]).length,t.activities.length,t.id);
+    assert.ok(html.includes('class="engineering-flow"'),t.id);
+    assert.equal((html.match(/class="activity-breakdown engineering-step /g)||[]).length,t.activities.length,t.id);
     for(const a of t.actions)assert.ok(html.includes('visual-'+a.activityId),a.id);
     assert.ok(html.includes('Exceptions and repeat rules'));
     assert.ok(!html.includes('<img'));
   }
+});
+
+
+test('process-step actions are contained in collapsed engineering steps',()=>{
+ const w=seedWorkspace(),t=PROCESS_LIBRARY.find(p=>p.id==='klt-empty-tote-sorting-whiteboard');
+ const html=renderApp({w,c:w.cases[0],view:'processes',libraryId:t.id,questions:[],role:'Engineer view',saveStatus:'Local'});
+ const steps=[...html.matchAll(/<details class="activity-breakdown engineering-step [\s\S]*?<\/details>/g)].map(m=>m[0]);
+ assert.equal(steps.length,13);
+ assert.ok(steps.every(s=>s.includes('engineering-symbol')&&s.includes('engineering-actions')&&s.includes('Action breakdown')));
+ assert.ok(steps.every(s=>!s.slice(0,s.indexOf('>')).includes(' open')));
+ assert.ok(!html.includes('decomposition-heading'));
 });

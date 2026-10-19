@@ -1,5 +1,15 @@
 # Changelog
 
+## Engineering process sheets · 19 October 2026
+
+- Replaced the process-card grid with illustrated, connected handling sections.
+- Put each action breakdown inside its process step.
+- Added step-level expand/collapse and whole-chart expand/collapse.
+- Removed the separate action-breakdown panel and tab.
+- Kept conditional capability and bundle constraints visible.
+- Verified 47 domain tests. Calculation rules are unchanged.
+
+
 ## Visual process library · 19 October 2026
 
 - Added process-area cards and a collapsible process explorer.
