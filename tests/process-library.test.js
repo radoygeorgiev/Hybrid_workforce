@@ -108,7 +108,7 @@ test('visual process library renders every process with flow nodes and expandabl
   const w=seedWorkspace(),c=w.cases[0];
   for(const t of PROCESS_LIBRARY){
     const html=renderApp({w,c,view:'processes',libraryId:t.id,processArea:t.area,questions:[],role:'Engineer view',saveStatus:'Local'});
-    assert.ok(html.includes('class="engineering-flow"'),t.id);
+    assert.ok(html.includes('class="engineering-flow compact-process"'),t.id);
     assert.equal((html.match(/class="activity-breakdown engineering-step /g)||[]).length,t.activities.length,t.id);
     for(const a of t.actions)assert.ok(html.includes('visual-'+a.activityId),a.id);
     assert.ok(html.includes('Exceptions and repeat rules'));
@@ -125,4 +125,15 @@ test('process-step actions are contained in collapsed engineering steps',()=>{
  assert.ok(steps.every(s=>s.includes('engineering-symbol')&&s.includes('engineering-actions')&&s.includes('Action breakdown')));
  assert.ok(steps.every(s=>!s.slice(0,s.indexOf('>')).includes(' open')));
  assert.ok(!html.includes('decomposition-heading'));
+});
+
+
+test('compact process steps expose their atomic actions before expansion',()=>{
+ const w=seedWorkspace(),t=PROCESS_LIBRARY.find(p=>p.name==='Rear container unloading');
+ assert.ok(t);
+ const html=renderApp({w,c:w.cases[0],view:'processes',libraryId:t.id,questions:[],role:'Engineer view',saveStatus:'Local'});
+ const steps=[...html.matchAll(/<details class="activity-breakdown engineering-step [\s\S]*?<\/details>/g)].map(m=>m[0]);
+ assert.equal(steps.length,7);
+ for(const step of steps){const summary=step.slice(0,step.indexOf('</summary>'));assert.ok(summary.includes('atomic-preview'));assert.ok(summary.includes('compact-step-title'));}
+ assert.ok(!html.includes('engineering-lane'));
 });

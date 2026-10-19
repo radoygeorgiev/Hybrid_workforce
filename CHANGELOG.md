@@ -1,5 +1,14 @@
 # Changelog
 
+## Compact process hierarchy · 19 October 2026
+
+- Replaced large handling-section blocks with one numbered process sequence.
+- Show atomic actions beside every process step before expansion.
+- Keep capability and assignment details inside expandable steps.
+- Keep handling-group information inside the expanded detail.
+- Verified 48 domain tests and browser expansion/collapse. Calculation rules are unchanged.
+
+
 ## Engineering process sheets · 19 October 2026
 
 - Replaced the process-card grid with illustrated, connected handling sections.
