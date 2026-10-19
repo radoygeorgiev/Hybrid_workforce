@@ -1,5 +1,16 @@
 # Changelog
 
+## Scope study and assignment results · 19 October 2026
+
+- Reused the compact process chart in Matches, Business case, and exported recommendations.
+- Added scenario-specific human, technology, and shared steps with modelled productivity or explicit unknowns.
+- Added a separate AWS deployment plan page for the supplied September scope. The existing eight case stages remain.
+- Added saved configurations, request manifests, benchmark entry, and comparison groups.
+- Added matching browser/server validation and case revision checks.
+- Kept external runtimes, training, and physical deployment disconnected.
+- Verified 53 domain and 13 server tests. Economic calculation rules are unchanged.
+
+
 ## Compact process hierarchy · 19 October 2026
 
 - Replaced large handling-section blocks with one numbered process sequence.

@@ -43,6 +43,20 @@ class DatabaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_workspace(data)
 
+    def test_study_records_persist_and_reject_invalid_benchmarks(self):
+        data = workspace()
+        b = {"id": "bench", "configId": "robot", "policy": "v1", "policyKind": "Baseline", "protocol": "p1", "taskVersion": "task1", "sceneVersion": "scene1", "conditions": "seed1", "source": "test artifact", "evidence": "Sample", "date": "2026-10-19", "caseRevision": 1, "attempts": 10, "successes": 9, "cycleSec": 2.0, "interventions": None}
+        data["cases"][0]["study"] = {"settings": {"sceneVersion": "scene1"}, "benchmarks": [b], "requests": []}
+        self.db.save(data, 0)
+        self.assertEqual(Database(self.path).read()["workspace"], data)
+        b["successes"] = 11
+        with self.assertRaises(ValueError):
+            validate_workspace(data)
+        b["successes"] = 9
+        b["cycleSec"] = -1
+        with self.assertRaises(ValueError):
+            validate_workspace(data)
+
     def test_save_and_reopen(self):
         self.assertEqual(self.db.read(), {"workspace": None, "version": 0})
         self.assertEqual(self.db.save(workspace(), 0), 1)

@@ -1,3 +1,4 @@
+import { newStudy, validateBenchmark, studyRequest } from './study.js';
 import { PROCESS_LIBRARY } from './process-library.js';
 import { makeProcessCase, analyseProcess } from './process-analysis.js';
 import { seedConfigs, makeCase, uid, copy, SKILLS, STAGES, SOURCE_STATES } from './data.js';
@@ -20,7 +21,7 @@ function notify(message,kind='') { const toast=document.getElementById('toast');
 function render() { if(suppressRender)return;appRoot.innerHTML=renderApp(ctx());document.title=`${ui.view==='case'?store.current().name:'Hybrid Workforce'} · Version 2`; }
 store.subscribe(render);
 function updateCase(fn,material=true,quiet=false) { suppressRender=quiet;try{store.updateCase(store.current().id,fn,material);}finally{suppressRender=false;} }
-function setPath(record,path,value) { const parts=path.split('.');if(parts.some(p=>['__proto__','constructor','prototype'].includes(p)))throw new Error('Unsupported field.');let node=record;for(const part of parts.slice(0,-1)){if(node[part]==null)node[part]={};node=node[part];}node[parts.at(-1)]=value; }
+function setPath(record,path,value) { if(path.startsWith('study.'))record.study ||= newStudy();const parts=path.split('.');if(parts.some(p=>['__proto__','constructor','prototype'].includes(p)))throw new Error('Unsupported field.');let node=record;for(const part of parts.slice(0,-1)){if(node[part]==null)node[part]={};node=node[part];}node[parts.at(-1)]=value; }
 function readForm(form) { const result={};for(const [key,value] of new FormData(form)){const input=form.elements.namedItem(key);result[key]=input?.type==='number'?(value===''?null:Number(value)):String(value).trim();}return result; }
 function closeDialog(){document.getElementById('app-dialog')?.close();modalSubmit=null;}
 function openDialog(title,body,onSubmit=null,{submit='Save',wide=false,footer=''}={}) {
@@ -70,6 +71,26 @@ function configDialog(id=null) {
     notify('Configuration saved. Material changes require a new review.');
   },{wide:true});
 }
+function saveStudyStage(node) {
+ const values={};for(const field of node.closest('.study-stage').querySelectorAll('[data-field]'))values[field.dataset.field.split('.').at(-1)]=field.value;
+ updateCase(c=>{c.study ||= newStudy();if(Object.entries(values).some(([key,value])=>c.study.settings[key]!==value)){Object.assign(c.study.settings,values);c.study.revision=(c.study.revision||1)+1;}},false);
+}
+function benchmarkDialog() {
+ const c=store.current(),settings=c.study?.settings||{};
+ const real=store.get().configs.filter(v=>v.realProduct);
+ openDialog('Record external benchmark',`<div class="callout subtle"><p>This records a supplied result. It does not run a robot or validate an external claim. Use Sample for demonstration values.</p></div>`+gridFields([
+ formSelect('configId','Exact robot configuration',real[0]?.id||store.get().configs[0].id,(real.length?real:store.get().configs).map(v=>[v.id,v.name])),
+ formSelect('evidence','Result evidence','Sample',['Sample','Simulated','Measured']),formSelect('policyKind','Policy stage','Baseline',['Baseline','Refined','Scripted']),formInput('policy','Policy or controller version','',{type:'text',required:true}),
+ ...[['protocol','Benchmark protocol'],['taskVersion','Task version'],['sceneVersion','Scene version'],['conditions','Start states, seeds, objects, and test limits']].map(([key,label])=>formInput(key,label,settings[key]||'',{type:'text',required:true})),
+ formInput('attempts','Attempted episodes',null,{min:1,max:10000000,step:1,required:true}),formInput('successes','First-pass successful episodes',null,{min:0,step:1,required:true}),formInput('cycleSec','Mean task cycle',null,{unit:'s',min:0.001}),formInput('interventions','Human intervention events',null,{min:0,step:1}),formInput('recoverySec','Mean recovery per intervention',null,{unit:'s'}),formInput('energyKwh','Run energy',null,{unit:'kWh'}),formInput('source','Result artifact or test report','',{type:'text',required:true})
+ ]),values=>{
+ const b={...values,id:uid('benchmark'),date:new Date().toISOString(),caseRevision:c.revision,studyRevision:c.study?.revision||1};
+ const errors=validateBenchmark(b,new Set(store.get().configs.map(v=>v.id)));if(errors.length)throw new Error(errors.join(' '));
+ updateCase(c=>{c.study ||= newStudy();if(c.study.benchmarks.length>=500)throw new Error('Benchmark record limit reached.');c.study.benchmarks.push(b);},false);
+ notify('Benchmark recorded. No product timing or business-case input was changed.');
+ },{wide:true,submit:'Record result'});
+}
+
 function sourceDialog(id=null) {
   const s=store.current().sources.find(s=>s.id===id)||{id:uid('source'),name:'',type:'Process / SOP',status:'Unknown',date:'',note:'',fileId:null};
   openDialog(id?'Review source':'Add source',gridFields([formInput('name','Source name',s.name,{type:'text',required:true}),formSelect('type','Source type',s.type,['Process / SOP','Engineering model','Layout / CAD','MTM / time study','Demand / orders','Benchmark / trial','Commercial quote','Inventory / SKU','Human workforce','Automation resources','Resource capabilities','Resource status','Operational constraints','Business rules / SLA','Traffic / congestion','Equipment / IoT','Other']),formSelect('status','Data status',s.status,SOURCE_STATES),formInput('date','Source / capture date',s.date,{type:'date'})])+formNote('note','Source, conditions, method, samples, and missing data',s.note),values=>{updateCase(c=>{if(id)Object.assign(c.sources.find(x=>x.id===id),values);else c.sources.push({...s,...values});});notify('Source saved.');});
@@ -139,6 +160,10 @@ document.addEventListener('click',async event=>{
     else if(action==='expand-process-activities'){const items=[...document.querySelectorAll('.activity-breakdown')],expand=items.some(x=>!x.open);items.forEach(x=>x.open=expand);node.textContent=expand?'Collapse all steps':'Expand all steps';}
     else if(action==='process-visual-tab'){const root=node.closest('.process-canvas');root.querySelectorAll('.process-view-tabs button').forEach(x=>{x.classList.toggle('selected',x===node);x.setAttribute('aria-pressed',String(x===node));});const expand=id==='decomposition';root.querySelectorAll('.activity-breakdown').forEach(x=>x.open=expand);root.querySelector('[data-action="expand-process-activities"]').textContent=expand?'Collapse all steps':'Expand all steps';root.querySelector('[data-process-pane="flow"]').scrollIntoView({behavior:'smooth',block:'start'});}
 
+    else if(action==='study-save'){saveStudyStage(node);const stage=document.querySelector('[data-study-stage="'+id+'"]');if(stage)stage.open=true;notify('Study configuration saved. Earlier AWS benchmark records require a plan revision review.');}
+    else if(action==='study-benchmark')benchmarkDialog();
+    else if(action==='study-request'){saveStudyStage(node);const date=new Date().toISOString(),request=studyRequest(c,store.get().configs,id,uid('request'),date);updateCase(c=>{c.study ||= newStudy();if(c.study.requests.length>=500)throw new Error('Request record limit reached.');c.study.requests.push({id:request.id,date,stage:id,caseRevision:c.revision,studyRevision:c.study?.revision||1,status:'Prepared locally'});},false);jsonDownload(`study-${id}-${c.id}.json`,request);notify('Request prepared locally. No external workload was started.');}
+    else if(action==='study-export')jsonDownload(`simulation-study-${c.id}.json`,{type:'Local simulation study',externalExecution:false,caseId:c.id,caseRevision:c.revision,study:c.study||newStudy(),process:c.actions,scenarios:c.scenarios,boundary:'Simulation-only scope. Physical deployment and production WMS/LMS integration are excluded.'});
     else if(action==='start-process'){const next=makeProcessCase(id,store.get().configs);store.addCase(next);history.replaceState(null,'','#case');ui.view='case';ui.tab='Process';render();window.scrollTo(0,0);notify('Engineering draft created. Review the path, actions, requirements, and work splits.');}
     else if(action==='review-process'){openDialog('Confirm the process draft',`<p>Confirm that you have reviewed the source path, activity order, exceptions, repeat rules, atomic actions, handoffs, and human roles. This does not confirm task times or machine performance.</p>`+formNote('basis','Review basis and remaining conditions',''),v=>{if(v.basis.length<12)throw new Error('Record the review basis and remaining conditions.');updateCase(c=>{c.templateReviewed=true;c.processReviewNote=v.basis;});notify('Process draft review recorded. Complete the remaining numeric inputs.');},{submit:'Record review'});}
     else if(action==='analyse-process'){openDialog('Rebuild candidate work splits','<p>Create new whole-activity work-split drafts from the current actions and real product records. Existing options remain. One machine is a placeholder, not a fleet recommendation.</p>',()=>{const analysis=analyseProcess(c,store.get().configs);updateCase(c=>{for(const v of store.get().configs.filter(v=>v.realProduct&&!v.excludedFromMatching)){const bundles=analysis.bundles.filter(b=>b.candidates.some(x=>x.id===v.id));if(bundles.length)c.scenarios.push({id:uid('draft'),name:'Reviewed draft · '+v.name,kind:'hybrid',counts:{[v.id]:1},assignments:Object.fromEntries(bundles.flatMap(b=>b.rows.map(r=>[r.action.id,v.id]))),manualFactor:1,engineeringDraft:true});}c.templateReviewed=false;});},{submit:'Create drafts'});}
@@ -187,6 +212,7 @@ document.addEventListener('click',async event=>{
 document.addEventListener('change',async event=>{
   const node=event.target,c=store.current();
   try{
+    if(node.dataset.field?.startsWith('study.'))return;
     if(node.dataset.field){const value=node.type==='number'?(node.value===''?null:Number(node.value)):node.value;if(node.type==='number'&&value!=null&&(!Number.isFinite(value)||(node.min!==''&&value<Number(node.min))||(node.max!==''&&value>Number(node.max))||(node.step==='1'&&!Number.isInteger(value)))){render();throw new Error('Use a value within the field limits. The previous value was kept.');}updateCase(c=>setPath(c,node.dataset.field,value),true,true);return;}
     if(node.dataset.assignment){const actor=node.value;updateCase(c=>{let s=activeScenario();if(s.kind==='manual'&&actor!=='human'){s={...copy(s),id:uid('option'),name:'Custom hybrid from current method',kind:'hybrid'};c.scenarios.push(s);c.selectedScenarioId=s.id;}if(actor==='human')delete s.assignments[node.dataset.assignment];else s.assignments[node.dataset.assignment]=actor;cleanScenarioCounts(c);});return;}
     if(node.dataset.count){updateCase(c=>activeScenario().counts[node.dataset.count]=node.value===''?null:Number(node.value));return;}
@@ -223,8 +249,8 @@ document.addEventListener('change',async event=>{
 
 window.matchMedia('(max-width:700px)').addEventListener('change',render);
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&ui.mobileMenu){ui.mobileMenu=false;render();document.querySelector('.mobile-toggle')?.focus();}});
-window.addEventListener('hashchange',()=>{const view=location.hash.slice(1);if(['executive','evaluations','deployments','catalog','evidence','workflow','case','processes','pipeline'].includes(view)){ui.view=view;render();}});
+window.addEventListener('hashchange',()=>{const view=location.hash.slice(1);if(['executive','evaluations','deployments','catalog','evidence','workflow','case','processes','pipeline','aws-plan'].includes(view)){ui.view=view;render();}});
 window.addEventListener('beforeunload',()=>{store.flush();});
-if(['executive','evaluations','deployments','catalog','evidence','workflow','case','processes','pipeline'].includes(location.hash.slice(1)))ui.view=location.hash.slice(1);
+if(['executive','evaluations','deployments','catalog','evidence','workflow','case','processes','pipeline','aws-plan'].includes(location.hash.slice(1)))ui.view=location.hash.slice(1);
 if(ui.view==='case')ui.tab=store.current().lastTab||'Overview';
 render();store.connect();

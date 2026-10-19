@@ -1,3 +1,4 @@
+import { validateStudy } from './study.js';
 import { researchedProducts } from './products.js';
 import { APP_SCHEMA, CASE_TABS, copy, seedWorkspace, INPUT_GROUPS, SOURCE_STATES } from './data.js';
 import { validateCase, validateObservation } from './engine.js';
@@ -21,6 +22,7 @@ export function validateWorkspace(value) {
         if (record.sourceId && !c.sources.some(s=>s?.id===record.sourceId)) errors.push(`${c.name}: input source is missing.`);
       }
     }
+    errors.push(...validateStudy(c.study,configIds));
     if (c.lastTab && !CASE_TABS.includes(c.lastTab)) errors.push(`${c.name}: the saved case stage is invalid.`);
     if ([...c.actions,...c.scenarios,...c.sources,...c.observations,...c.deployment.assets,...c.deployment.testResults,...c.issues].some(x=>!x||typeof x!=='object')) { errors.push(`${c.name}: a child record is invalid.`); continue; }
     if (c.actions?.length > 500 || !c.scenarios.length || c.scenarios.length > 500 || c.observations.length > 10000) { errors.push('A case needs at least one option and must stay within the local record limits.'); continue; }

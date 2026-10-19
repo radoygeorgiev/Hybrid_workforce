@@ -49,6 +49,35 @@ def validate_workspace(value):
         for group in (c["baseline"], c["economics"]):
             if any(type(n) in (int, float) and (not math.isfinite(n) or n < 0) for n in group.values()):
                 raise ValueError("Planning numbers must be non-negative or unknown.")
+        if "study" in c:
+            study = c["study"]
+            if not isinstance(study, dict) or not isinstance(study.get("settings"), dict) or not isinstance(study.get("benchmarks"), list) or not isinstance(study.get("requests"), list):
+                raise ValueError("Invalid simulation study.")
+            if len(study["settings"]) > 100 or any(not isinstance(v, str) or len(v) > 20000 for v in study["settings"].values()) or len(study["benchmarks"]) > 500 or len(study["requests"]) > 500:
+                raise ValueError("Study record limit or setting is invalid.")
+            if "revision" in study and (type(study["revision"]) is not int or study["revision"] < 1):
+                raise ValueError("Invalid AWS plan revision.")
+            benchmark_ids = set()
+            for record in study["benchmarks"]:
+                if not isinstance(record, dict) or any(not isinstance(record.get(k), str) or not record[k].strip() or len(record[k]) > 20000 for k in ("id", "configId", "policy", "policyKind", "protocol", "taskVersion", "sceneVersion", "conditions", "source", "evidence", "date")):
+                    raise ValueError("Benchmark identity and evidence are required.")
+                if record["id"] in benchmark_ids or record["configId"] not in config_ids or record["evidence"] not in ("Sample", "Simulated", "Measured") or record["policyKind"] not in ("Baseline", "Refined", "Scripted"):
+                    raise ValueError("Invalid benchmark identity or evidence.")
+                if "studyRevision" in record and (type(record["studyRevision"]) is not int or record["studyRevision"] < 1):
+                    raise ValueError("Invalid benchmark AWS plan revision.")
+                benchmark_ids.add(record["id"])
+                if type(record.get("caseRevision")) is not int or record["caseRevision"] < 1 or type(record.get("attempts")) is not int or not 1 <= record["attempts"] <= 10000000 or type(record.get("successes")) is not int or not 0 <= record["successes"] <= record["attempts"]:
+                    raise ValueError("Invalid benchmark counts or revision.")
+                for key in ("cycleSec", "recoverySec", "energyKwh"):
+                    n = record.get(key)
+                    if n is not None and (type(n) not in (int, float) or not math.isfinite(n) or n < 0 or key == "cycleSec" and n == 0):
+                        raise ValueError("Invalid benchmark timing or energy.")
+                n = record.get("interventions")
+                if n is not None and (type(n) is not int or n < 0):
+                    raise ValueError("Invalid intervention count.")
+            for record in study["requests"]:
+                if not isinstance(record, dict) or not isinstance(record.get("id"), str) or record.get("stage") not in ("capture", "robots", "task", "data", "benchmark", "des", "learning", "review") or record.get("status") != "Prepared locally" or type(record.get("caseRevision")) is not int or record["caseRevision"] < 1 or not isinstance(record.get("date"), str):
+                    raise ValueError("Invalid study request record.")
         ids = {a.get("id") for a in c["actions"] if isinstance(a, dict)}
         if len(ids) != len(c["actions"]) or None in ids:
             raise ValueError("Action identifiers must be unique.")

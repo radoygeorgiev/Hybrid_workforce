@@ -87,3 +87,9 @@ Read [the engineering review](docs/process-and-product-review.md), [process inde
 - **Libraries:** Review process templates and technology records.
 - **Active case:** Open its evidence and questions. The page shows only that case. Use the case selector to change the scope.
 - **Help:** Use **How it works** in the top bar. It stays separate from work and status pages.
+
+## AWS deployment plan and result diagrams
+
+The existing eight-stage case workflow remains. **AWS programme → AWS deployment plan** is an additional, case-linked workstream based on the supplied September 2026 scope. It stores capture, robot, task, demonstration, benchmark, DES, learning, cost, and handover notes. It prepares local request manifests and records external benchmark results. GPU, Isaac, SimPy, training, and agent services are not connected.
+
+The compact process diagram also appears in Matches, Business case, and exported recommendations. It uses the selected scenario to show human, technology, and shared work. Missing productivity remains unknown. See [the scope map](docs/aws-scope-implementation.md) for local functions and external work.

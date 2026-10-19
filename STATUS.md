@@ -60,3 +60,12 @@ Function coverage and the remaining boundary for each of the 52 functions: [docs
 ## Navigation update
 
 Grouped the menu into Dashboards, Evaluation, Deployment, and Libraries. The evaluation pipeline is a separate dashboard view. Evidence and questions are scoped to the active case. How it works is a visible Help control in the top bar. The active case remains visible while the menu can scroll. Desktop and mobile navigation were checked. There are 44 JavaScript tests and 12 Python tests.
+
+## Additional AWS workstream · 19 October
+
+- The original eight case stages remain. The separate AWS deployment plan page augments them.
+- Compact work-split diagrams show the selected actors and modelled productivity in Matches, Business case, and recommendation reports.
+- AWS plan settings and supplied benchmark records persist locally. Plan revisions are separate from evaluation revisions.
+- Local request packages do not submit or execute external workloads.
+- Scope map: docs/aws-scope-implementation.md. External runtime and agent functions are mock interfaces.
+- Both builds, 53 domain tests, and 13 server tests pass. Browser checks covered actor changes, sample benchmark entry, configuration persistence, independent plan revisions, and the unchanged eight-stage workflow.
