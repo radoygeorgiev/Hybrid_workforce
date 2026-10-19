@@ -1,5 +1,15 @@
 # Changelog
 
+## Visual process library · 19 October 2026
+
+- Added process-area cards and a collapsible process explorer.
+- Added activity flow charts for all 70 process variants.
+- Added clickable flow nodes and expandable capability tables.
+- Added expand/collapse controls and visible bundle constraints.
+- Removed source-photo listings and images from the process library page. Original evidence remains in the project records.
+- Verified 46 domain tests, desktop controls, and mobile page width. Calculation rules are unchanged.
+
+
 ## 2.1.0-vision.1 · 19 October 2026
 
 - Added 70 source-linked process variants from 19 flow photos and the owner whiteboard.

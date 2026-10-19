@@ -63,7 +63,7 @@ test('research migration adds missing records and preserves edited configuration
 test('library cases exclude fictional configurations from generated matching options',()=>{
   const w=seedWorkspace(),c=makeProcessCase('kit-to-stock',w.configs);assert.deepEqual(generateOptions(c,w.configs),[]);
   const ctx={w,c,view:'processes',questions:[],saveStatus:'Local',role:'Engineer view',tab:'Process'};
-  const library=renderApp(ctx);assert.ok(library.includes('Create and analyse evaluation'));assert.ok(library.includes('IMG_5903.HEIC'));
+  const library=renderApp(ctx);assert.ok(library.includes('Create evaluation'));assert.ok(library.includes('Process explorer'));assert.ok(!library.includes('Source coverage'));assert.ok(!library.includes('IMG_5903.HEIC'));
   const catalog=renderApp({...ctx,view:'catalog'});assert.ok(catalog.includes('MiR1200 Pallet Jack'));assert.ok(catalog.includes('Not converted to EUR'));
 });
 
@@ -101,4 +101,17 @@ test('activity display retains a whole bundle when one required action has no ca
   assert.ok(!pickup.includes('Bundle: conditional'));
   assert.ok(html.includes('Assignment basis'));
   assert.ok(html.includes('Peel'));
+});
+
+
+test('visual process library renders every process with flow nodes and expandable capability rows',()=>{
+  const w=seedWorkspace(),c=w.cases[0];
+  for(const t of PROCESS_LIBRARY){
+    const html=renderApp({w,c,view:'processes',libraryId:t.id,processArea:t.area,questions:[],role:'Engineer view',saveStatus:'Local'});
+    assert.ok(html.includes('data-action="focus-process-activity"'),t.id);
+    assert.equal((html.match(/class="activity-breakdown"/g)||[]).length,t.activities.length,t.id);
+    for(const a of t.actions)assert.ok(html.includes('visual-'+a.activityId),a.id);
+    assert.ok(html.includes('Exceptions and repeat rules'));
+    assert.ok(!html.includes('<img'));
+  }
 });
