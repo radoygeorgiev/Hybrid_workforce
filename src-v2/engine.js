@@ -1,12 +1,16 @@
-export const MODEL_VERSION = 'planning-2.0.1';
+export const MODEL_VERSION = 'planning-2.1.0';
 export const finite = value => typeof value === 'number' && Number.isFinite(value);
 export const round = (value, digits = 2) => finite(value) ? Number(value.toFixed(digits)) : null;
 export const total = values => values.reduce((a, b) => a + b, 0);
 
 export function fitAction(action, config) {
   const checks = [];
+  if (action.humanRetained) checks.push({name:'Retained human decision',status:'blocked',detail:action.humanReason||'This draft retains the human role.'});
+  if (config?.excludedFromMatching) checks.push({name:'Product variant',status:'blocked',detail:'This product variant has no supported warehouse development or task basis.'});
+  if (action.requiredCapabilities?.length) for(const capability of action.requiredCapabilities) checks.push({name:`Capability: ${capability}`,status:config?.capabilities?.includes(capability)?'fit':'unknown',detail:config?.capabilities?.includes(capability)?'Engineering candidate. Confirm the tool, policy, and operating envelope.':'Capability is not established for this configuration.'});
   if (!config) return { status: 'unknown', checks: [{ name: 'Configuration', status: 'unknown', detail: 'Configuration is missing.' }] };
-  checks.push({ name: 'Skill', status: config.skills?.includes(action.skill) ? 'fit' : 'blocked', detail: `${action.skill}: ${config.skills?.includes(action.skill) ? 'included in this record' : 'not included'}` });
+  const skillDeclared=config.skills?.includes(action.skill)||action.requiredCapabilities?.length>0&&action.requiredCapabilities.every(cap=>config.capabilities?.includes(cap));
+  checks.push({ name:'Skill',status:skillDeclared?'fit':'blocked',detail:skillDeclared?'Skill or complete capability candidate set is recorded. Confirm the application task.':`${action.skill}: not included in this record` });
   for (const [label, need, available, direction, unit] of [
     ['Payload', action.payloadKg, config.payloadKg, 'minimum', 'kg'],
     ['Reach', action.reachM, config.reachM, 'minimum', 'm'],
@@ -24,6 +28,7 @@ export function fitAction(action, config) {
 
 export function validateCase(c) {
   const errors = [];
+  if(c.processTemplateId&&!c.templateReviewed)errors.push('Confirm the source path and engineering decomposition before using the business case.');
   const bounds = {
     'baseline.demandDaily': [0, 1e8], 'baseline.peakFactor': [1, 20], 'baseline.shifts': [1, 6], 'baseline.shiftHours': [0.1, 24], 'baseline.daysYear': [1, 366], 'baseline.peoplePerShift': [0, 10000], 'baseline.humanUtilPct': [1, 100], 'baseline.salaryAnnual': [0, 1e7], 'baseline.minPeoplePerShift': [0, 10000], 'baseline.staffingCover': [1, 5], 'baseline.qualityTargetPct': [0, 100],
     'economics.integration': [0, 1e10], 'economics.siteChanges': [0, 1e10], 'economics.softwareAnnual': [0, 1e10], 'economics.supportAnnual': [0, 1e10], 'economics.rampMonths': [0, 12], 'economics.horizonYears': [1, 20], 'economics.discountPct': [0, 100], 'economics.retainedPct': [0, 100], 'economics.cashableFte': [0, 10000], 'economics.residualValue': [0, 1e10], 'economics.otherBenefitAnnual': [0, 1e10], 'economics.handoffSec': [0, 10000]
@@ -63,6 +68,10 @@ export function evaluateScenario(c, scenario, configs, overrides = {}) {
   const configMap = new Map(configs.map(v => [v.id, v]));
   const assignments = scenario.assignments || {};
   if (Object.keys(assignments).some(id => !c.actions.some(a => a.id === id))) errors.push('An assignment links to a missing action.');
+  if(c.processTemplateId&&!isManual){
+    const bundles=new Map();for(const a of c.actions){const key=a.workBundleId||a.activityId||a.id;const actors=bundles.get(key)||new Set();actors.add(assignments[a.id]||'human');bundles.set(key,actors);}
+    if([...bundles.values()].some(actors=>actors.size>1))errors.push('A held-load or activity bundle has more than one actor. Review and redesign the handoff before splitting this bundle.');
+  }
   const robotSeconds = {}, assignedActions = {}, actionRows = [];
   let humanSeconds = 0, removedSeconds = 0, handoffs = 0, lastActor = 'human';
   const baselineSeconds = total(c.actions.map(a => a.seconds * a.frequency));
@@ -111,9 +120,11 @@ export function evaluateScenario(c, scenario, configs, overrides = {}) {
     const required = singleRate > 0 ? Math.ceil(peakHour / singleRate) : null;
     start.fleet.push({ id, name: v.name, count: count || 0, required, busySeconds: rawSeconds, retrySeconds, usablePct: usable * 100, rate: singleRate * (count || 0), source: v.source, interventionPct: interventions * 100 });
     const price = e.commercialModel === 'purchase' ? v.price : v.leaseMonthly;
+    if(v.realProduct){for(const key of ['extraCapex','extraOpexAnnual'])if(!finite(v[key])||v[key]<0)errors.push(`${v.name}: ${key} is not established. Enter zero explicitly only when justified.`);if(!v.commercialSource?.trim()||!['Assumed','Supplier claim','Measured'].includes(v.commercialStatus))errors.push(`${v.name}: record the EUR cost basis and its evidence status.`);}
     if (!finite(price) || price < 0) errors.push(`${v.name}: commercial price is missing or invalid.`);
-    if (e.commercialModel === 'purchase') { hardwareUpfront += (count || 0) * (v.price || 0); annualMachine += (count || 0) * (v.supportAnnual + v.energyAnnual); }
-    else annualMachine += (count || 0) * ((v.leaseMonthly || 0) * 12 + v.energyAnnual + (v.serviceIncluded ? 0 : v.supportAnnual));
+    if (e.commercialModel === 'purchase') { hardwareUpfront += (count || 0) * ((v.price || 0) + (v.extraCapex || 0)); annualMachine += (count || 0) * (v.supportAnnual + v.energyAnnual + (v.extraOpexAnnual || 0)); }
+    else annualMachine += (count || 0) * ((v.leaseMonthly || 0) * 12 + v.energyAnnual + (v.extraOpexAnnual || 0) + (v.serviceIncluded ? 0 : v.supportAnnual));
+    if(e.commercialModel!=='purchase')hardwareUpfront+=(count||0)*(v.extraCapex||0);
   }
   if (Object.keys(scenario.counts || {}).some(id => !robotSeconds[id] && scenario.counts[id] > 0)) errors.push('The fleet contains an unused configuration. Remove it or assign work to it.');
   if (errors.length) return { ...start, errors: [...new Set(errors)], actionRows };
@@ -195,6 +206,9 @@ export function stressScenario(c, scenario, configs) {
 
 export function generateOptions(c, configs, maxCount = 6) {
   const candidates = [];
+  if(c.processTemplateId)configs=configs.filter(v=>v.realProduct&&!v.excludedFromMatching);
+  const groupOf=a=>a.workBundleId||a.activityId||a.taskGroup||a.id;
+  const wholeBundleFits=(a,v)=>!c.processTemplateId||c.actions.filter(x=>groupOf(x)===groupOf(a)).every(x=>fitAction(x,v).status==='fit');
   const assemble = (name, assignments) => {
     const ids=[...new Set(Object.values(assignments))];
     if (!ids.length || ids.length>3) return;
@@ -204,13 +218,14 @@ export function generateOptions(c, configs, maxCount = 6) {
     candidates.push(scenario);
   };
   for(const v of configs){
-    const assignments=Object.fromEntries(c.actions.filter(a=>fitAction(a,v).status==='fit').map(a=>[a.id,v.id]));
+    const assignments=Object.fromEntries(c.actions.filter(a=>fitAction(a,v).status==='fit'&&wholeBundleFits(a,v)).map(a=>[a.id,v.id]));
     assemble(`${v.name} + people · draft`,assignments);
   }
   const mixed={};
   for(const a of c.actions){
-    const eligible=configs.filter(v=>!v.requiresOperator&&fitAction(a,v).status==='fit').sort((aConfig,bConfig)=>aConfig.times[a.skill]-bConfig.times[a.skill]);
-    if(eligible[0])mixed[a.id]=eligible[0].id;
+    const eligible=configs.filter(v=>!v.requiresOperator&&fitAction(a,v).status==='fit'&&wholeBundleFits(a,v)).sort((aConfig,bConfig)=>aConfig.times[a.skill]-bConfig.times[a.skill]);
+    const previous=c.processTemplateId&&c.actions.find(x=>groupOf(x)===groupOf(a)&&mixed[x.id]);
+    if(previous)mixed[a.id]=mixed[previous.id];else if(eligible[0])mixed[a.id]=eligible[0].id;
   }
   assemble('Mixed technology + people · fastest eligible action times',mixed);
   return candidates;

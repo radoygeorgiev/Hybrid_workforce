@@ -1,3 +1,4 @@
+import { researchedProducts } from './products.js';
 export const APP_SCHEMA = 2;
 export const STAGES = ['Define', 'Evaluate', 'Decide', 'Prepare', 'Pilot', 'Operate', 'Paused'];
 export const CASE_TABS = ['Overview', 'Inputs', 'Process', 'Matches', 'Scenarios', 'Results', 'Deployment', 'Learning'];
@@ -43,7 +44,7 @@ export function makeCase(name = 'Empty tote sorting', id = uid('case')) {
     purpose: 'Find a useful split of work between people and technology. Compare the whole process and its cost.',
     baseline: { demandDaily: 5000, peakFactor: 1.2, shifts: 2, shiftHours: 7.5, daysYear: 250, peoplePerShift: 4, humanUtilPct: 85, salaryAnnual: 75000, minPeoplePerShift: 1, staffingCover: 1, qualityTargetPct: 95, routeM: 5 },
     economics: { commercialModel: 'purchase', integration: 65000, siteChanges: 20000, softwareAnnual: 12000, supportAnnual: 6000, rampMonths: 3, horizonYears: 5, discountPct: 10, retainedPct: 75, cashableFte: 4, benefitMode: 'Avoided hires', residualValue: 0, otherBenefitAnnual: 0, handoffSec: 0.5 },
-    actions,
+    actions, inputGroups: {},
     sources: [
       { id: 'source-process', name: 'Tote process breakdown', type: 'Process / SOP', status: 'Sample', date: '2026-10-18', note: 'Twelve illustrative actions. Replace them with the site-reviewed process breakdown.', fileId: null },
       { id: 'source-engineering', name: 'Staffing and engineering model', type: 'Engineering model', status: 'Sample', date: '2026-10-18', note: 'Four positions per shift, two shifts. EUR75,000 per annual position. These are scenario assumptions.', fileId: null },
@@ -83,7 +84,7 @@ export function seedWorkspace() {
   transport.selectedScenarioId = 'amr-pilot';
   transport.deployment.assets = [{ id: 'demo-amr-01', name: 'AMR-01', configId: 'amr-m1', status: 'In pilot', serial: 'Sample asset', release: 'demo-0.1', note: 'Demonstration record. No live fleet connection.' }];
   transport.deployment.pilotNotes = 'Sample plan: compare good moves, interventions, remaining human work, and cost. Define real acceptance limits before a field trial.';
-  return { schemaVersion: APP_SCHEMA, activeCaseId: tote.id, cases: [tote, kitting, transport], configs: seedConfigs(), savedAt: new Date().toISOString() };
+  return { schemaVersion: APP_SCHEMA, activeCaseId: tote.id, cases: [tote, kitting, transport], configs: [...seedConfigs(), ...researchedProducts()], savedAt: new Date().toISOString() };
 }
 
 export const DEPLOY_CHECKS = [
@@ -95,4 +96,20 @@ export const DEPLOY_CHECKS = [
   ['operators', 'Prepare operators and support', 'Assign supervision, training, recovery, maintenance, and support duties.'],
   ['safety', 'Record the site safety review', 'The accountable site team must review the actual installation. A demo tick is not certification.'],
   ['pilot', 'Agree the pilot measures and stop rules', 'Define output, quality, intervention, cost, duration, and stop conditions.']
+];
+
+// Input records are context. They do not change the screening model by themselves.
+export const INPUT_GROUPS = [
+  ['layout', 'Warehouse layout', ['Zones, docks, racks, and workstations', 'Aisles, travel paths, and clearances', 'Charging areas and handoff points'], 'Route and resource-position plan', 'Reference only. No CAD parsing or path optimisation.'],
+  ['process', 'Process flows', ['Receiving, putaway, and replenishment', 'Picking, packing, staging, and shipping', 'Action sequence, MTM study, and engineering model'], 'Work sequence and human / machine split', 'Enter reviewed actions and times in Process. Those fields drive the model.'],
+  ['demand', 'Orders and demand', ['Orders and inbound volumes', 'Forecasts and peak periods', 'Priorities and cut-off times'], 'Prioritised work queue', 'Daily demand and peak factor drive screening. No live task queue.'],
+  ['inventory', 'Inventory and SKU data', ['Locations and quantities', 'Dimensions and weight', 'Handling and storage requirements'], 'Movement and task-assignment plan', 'Map load and reach requirements to each process action. No stock-system connection.'],
+  ['workforce', 'Human workforce', ['Availability, shifts, and location', 'Skills, certificates, and productivity', 'Labour rates, staffing, and cover'], 'Person-to-task assignment plan', 'Baseline staffing and labour cost drive the model. No individual staff dispatch.'],
+  ['automation', 'Automation resources', ['AMRs, AGVs, and forklifts', 'Robot arms, humanoids, and assist tools', 'ASRS, conveyors, and installed quantities'], 'Machine-to-task assignment plan', 'Use Technology library and scenario counts. Other technology types need a supported configuration.'],
+  ['capabilities', 'Resource capabilities', ['Payload, speed, and reach', 'Manipulation, skills, and task performance', 'Interfaces, tools, and operating limits'], 'Human and machine capability match', 'Library skills, limits, and task times drive matching. Verify each source.'],
+  ['status', 'Real-time resource status', ['Location, availability, and workload', 'Battery level and charging state', 'Faults and maintenance status'], 'Dispatch and reassignment', 'Snapshot record only. No live telemetry or dispatch.'],
+  ['constraints', 'Operational constraints', ['Safety rules and restricted zones', 'Sequence rules and dependencies', 'Shared work, handoffs, and recovery'], 'Feasible execution plan for site review', 'Some action dependencies and limits are checked. No site safety validation.'],
+  ['rules', 'Business rules and service levels', ['Customer priority', 'Order deadlines and service targets', 'Cost limits and decision rules'], 'Service-based task priority', 'Reference only. No live service-level scheduler.'],
+  ['traffic', 'Traffic and congestion', ['Human and robot traffic', 'Queues and blocked aisles', 'Dock congestion and peak conditions'], 'Route and congestion plan', 'Reference only. No traffic or queue simulation.'],
+  ['sensors', 'Equipment and IoT signals', ['Sensor data and equipment health', 'Energy use', 'Environmental conditions'], 'Maintenance and operating insights', 'Snapshot record only. No prediction or sensor connection.']
 ];

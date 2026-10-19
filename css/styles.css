@@ -21,3 +21,44 @@ small,.metric-detail,.section-title p,.prototype-line,.app-footer{color:#7d8e72}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}@media print{.sidebar,.topbar,.app-footer,.case-tabs,.prototype-line,.toast,.button,.toolbar,dialog{display:none!important}.app-main{margin:0}main{padding:0;max-width:none}.panel,.metric{box-shadow:none;border-color:#ccc;break-inside:avoid}.two-columns{display:block}.metrics{grid-template-columns:repeat(4,1fr)}body{background:white;color:#111}.table-scroll{overflow:visible}th,td{padding:7px}.case-heading{margin-top:0}}
 
 .nav-scrim{display:none}@media(max-width:700px){.nav-scrim{display:block;position:fixed;inset:0;background:#14351f55;border:0;z-index:25}.button{min-height:38px}input:not([type="checkbox"]),select{min-height:40px}.match-matrix td:first-child,.match-matrix th:first-child{position:sticky;left:0;background:white;z-index:1}}
+
+/* Input register and the application guide. */
+.input-register {display:grid;gap:10px;margin-top:20px}
+.input-group {border:1px solid var(--border,#dde5d8);border-radius:12px;background:#fff}
+.input-group summary {display:flex;justify-content:space-between;align-items:center;gap:12px;padding:17px;cursor:pointer;font-weight:600;list-style:revert}
+.input-group summary::before {content:'+';font-size:20px}
+.input-group[open] summary::before {content:'−'}
+.input-group summary span:first-of-type {flex:1}
+.input-group-body {padding:0 20px 20px}
+.input-group-body>p {margin-bottom:14px}
+.workflow-chart {list-style:none;margin:0;padding:0;max-width:1000px}
+.workflow-chart>li {position:relative;padding-bottom:32px}
+.workflow-chart>li:not(:last-child)::after {content:'↓';display:block;text-align:center;font-size:25px;color:#456c52;margin-top:8px}
+.flow-step {display:flex;align-items:flex-start;gap:18px;border:1px solid #d5e3cd;border-radius:14px;padding:22px;background:#f5f8ef}
+.flow-step h3 {margin:0 0 7px}.flow-step p {margin:0 0 10px}.flow-step>div {flex:1}
+.flow-number {border-radius:50%;background:#244f40;color:#fff;min-width:34px;height:34px;display:grid;place-items:center}
+.flow-branch {border-left:3px solid #b38937;background:#fff9eb;padding:13px 17px;margin:12px 0 0 52px;line-height:1.6}
+@media(max-width:700px){.flow-step{flex-wrap:wrap;padding:15px}.flow-step>.chip{margin-left:50px}.flow-branch{margin-left:20px}.input-group summary{padding:12px}.input-group-body{padding:0 12px 16px}}
+
+.flow-overview{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:18px 0}.flow-overview .button{white-space:normal;justify-content:flex-start;text-align:left;background:#eef4e5;padding:14px;line-height:1.5}.flow-overview+.muted{margin-bottom:24px}@media(max-width:900px){.flow-overview{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Evaluation is the main work area. Stages are navigation, not approval gates. */
+.evaluation-path{padding:20px 24px;background:#173f35;color:#fff;border-radius:15px;margin:20px 0 14px;display:grid;gap:8px}.evaluation-path strong{font-size:18px;line-height:1.5}.evaluation-path span{color:#d8e7d4;font-size:12px}
+.case-tabs{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:7px;border:0;padding:0;margin:0 0 22px;overflow:visible}.case-tabs button{display:flex;flex-direction:column;align-items:flex-start;gap:8px;border:1px solid #c8d8bf;border-radius:10px;background:#fff;padding:15px 11px;text-align:left;white-space:normal;min-height:84px;color:#294c3a}.case-tabs button span{display:grid;place-items:center;border-radius:50%;background:#edf3e4;font-size:14px;width:26px;height:26px}.case-tabs button.active{background:#dce9c8;border:2px solid #345e42;padding:14px 10px;font-weight:700}.case-tabs button:not(:last-child)::after{content:'→';align-self:flex-end;color:#426d4c;margin-top:-20px;font-size:17px}
+.process-launch{display:flex;align-items:center;justify-content:space-between;gap:24px;background:#eef4e5;padding:23px;border-radius:14px;margin-top:18px}.process-launch h3{margin:0 0 9px}.process-launch p{margin:6px 0}.process-launch>.button{flex-shrink:0;white-space:normal;max-width:220px}.source-preview{margin-top:20px}.source-preview>summary,.sample-catalog>summary{cursor:pointer;font-weight:600;padding:16px 0}.source-preview img{max-width:100%;max-height:550px;object-fit:contain;margin:18px 0;background:#f2f4ee}.sample-catalog{margin-top:30px}.product-specs{font-size:12px;line-height:1.6}.product-specs dt{font-weight:600;margin-top:8px}.product-specs dd{margin-left:0}.published-price{margin-top:16px}
+.activity-sequence{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:22px 0}.activity-sequence>div{display:flex;flex-direction:column;gap:9px;padding:15px;background:#f3f7ed;border:1px solid #cedcc3;border-radius:12px;position:relative}.activity-sequence strong{font-size:13px}.activity-sequence small{font-size:11px;color:#49624b}.activity-sequence>div>span:first-child{border-radius:50%;background:#224d3c;color:#fff;display:grid;place-items:center;width:28px;height:28px}.activity-sequence .chip{white-space:normal;line-height:1.6}
+.sidebar nav .nav-item:first-child{font-weight:700}.technology-card a{font-size:12px;text-decoration:underline}.technology-card>details{margin:15px 0}.technology-card>.muted{font-size:12px}.process-launch+.source-preview{border-top:1px solid #d9e3d2}
+@media(max-width:1100px){.case-tabs{grid-template-columns:repeat(4,minmax(0,1fr))}.activity-sequence{grid-template-columns:repeat(3,minmax(0,1fr))}.sidebar-case{margin-top:16px}}
+@media(max-width:700px){.case-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.case-tabs button span{display:grid}.process-launch{flex-direction:column;align-items:flex-start}.process-launch>.button{max-width:100%}.activity-sequence{grid-template-columns:repeat(2,minmax(0,1fr))}.evaluation-path{padding:16px}.evaluation-path strong{font-size:15px}.evaluation-path span{font-size:11px}}
+
+.sidebar{overflow-y:auto}.sidebar nav,.sidebar-case,.sidebar-footer{flex-shrink:0}.activity-sequence .chip{font-size:10px}
+
+/* Separate dashboards from work steps. Evidence stays with the active case. */
+.sidebar .brand{margin-bottom:25px}.sidebar nav{gap:18px}.nav-group{display:flex;flex-direction:column;gap:3px}.nav-group-title{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:#9eb69f;margin:0 12px 6px;font-weight:600}.nav-group .nav-item{width:100%;padding:9px 12px;min-height:34px;font-size:11px}.nav-group .nav-item .icon{width:16px;height:16px}.sidebar .sidebar-case{margin-top:22px;padding:19px 0;gap:7px}.sidebar-case strong{line-height:1.5}.sidebar-evidence{display:flex;align-items:center;gap:8px;text-align:left;border:1px solid #52735e;background:#254d3d;color:#e4efda;padding:9px;border-radius:8px;font-size:11px;margin-top:6px}.sidebar-evidence.active{background:#d8e7c6;color:#24452f}.sidebar-evidence .icon{width:15px;height:15px;flex-shrink:0}.sidebar-case>small{font-size:9px;line-height:1.6;color:#a8bca7}.sidebar .sidebar-footer{padding-top:16px;display:grid;gap:15px}.help-link{color:#31573e!important;border:1px solid #d5e0cc!important;background:#f0f5e9!important;flex-shrink:0}.topbar-right{gap:12px}.topbar .save-status{max-width:150px}.topbar .role-select{max-width:160px}.topbar-left{min-width:0}.crumb{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:1000px){.topbar .save-status{display:none}.topbar .role-select{max-width:115px}}
+@media(max-width:700px){.topbar .role-select{display:none}.topbar .help-link{font-size:10px!important;padding:7px 9px}.topbar-right{gap:6px}.topbar-left .crumb{max-width:120px}.sidebar .brand{margin-bottom:22px}.sidebar .sidebar-footer{padding-bottom:15px}}
+/* Keep the active case and its evidence link visible while the menu can scroll. */
+.sidebar{overflow:hidden}.sidebar>.brand{flex-shrink:0}.sidebar>nav{min-height:0;flex:1;overflow-y:auto;padding-right:3px;scrollbar-width:thin}.sidebar .sidebar-case{flex-shrink:0;margin-top:14px;padding:12px 0}.sidebar .sidebar-footer{flex-shrink:0;margin-top:0;padding-top:10px;gap:10px}
+@media(max-height:800px){.sidebar{padding-top:22px;padding-bottom:15px}.sidebar .brand{margin-bottom:17px}.sidebar nav{gap:11px}.nav-group-title{margin-bottom:3px}.nav-group .nav-item{padding:7px 10px;min-height:30px}.sidebar-case{gap:5px!important}.sidebar-case>small{font-size:9px}.sidebar .sidebar-footer{gap:8px;font-size:9px}}
+
+.sidebar-runtime{display:flex;align-items:center;gap:5px;white-space:nowrap}.sidebar-runtime .online-dot{margin:0 3px 0 0}.sidebar-runtime .version{float:none;margin-left:auto}
+@media(max-height:800px){.sidebar-case>small{display:none}.sidebar .brand{margin-bottom:12px}.sidebar nav{gap:9px}}

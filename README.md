@@ -62,3 +62,28 @@ python -m unittest discover -s tests -p "test_*.py"
 `src-v2/` is the active application. `js/app.bundle.js` and `standalone.html` are generated files. The old `src-modules/` implementation is retained for reference and is excluded from the version 2 build.
 
 See [STATUS.md](STATUS.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [the design basis](docs/v2-design/design-review.html).
+
+## Potential inputs and application flow
+
+Open **Inputs** in a case to enter the 12 input groups from the platform input map. Expand a group. Enter its details, data status, owner, capture time, validity limit, and source link. Select **Save input group** before you leave. Attach source files through the source register.
+
+The group records are context. They do not change calculation fields automatically. Enter reviewed model values in the baseline, economics, Process, and Technology library fields. Real-time status and IoT records are snapshots. No live feed is connected.
+
+Open **How it works** in the main navigation, or open `index.html#workflow`. The guide shows the full path, return branches, input/output map, current support, and external service boundaries. Each stage links to the current case.
+
+## Process library and real product records
+
+The app opens in the evaluation centre. Select a process area, warehouse/storage type, and process. Selection computes a capability preview. **Create and analyse evaluation** opens an editable case with action and work-bundle drafts. The 70 variants come from 19 flow photos and one whiteboard. They need an owner review. Numeric site inputs remain unknown.
+
+The technology library shows ten real products first. Manufacturer pages and price listings are linked. The earlier sample configurations remain under a separate collapsed section for existing example cases. USD listing prices are not copied into EUR model costs. Record a scoped quote or a stated cost assumption. Added unit CAPEX and OPEX feed the business case.
+
+Read [the engineering review](docs/process-and-product-review.md), [process index](docs/process-library-index.csv), and [quote template](docs/product-quote-template.csv). `scripts/build-process-library.py` rebuilds the curated library and process exports. Run it from the repository root before the normal build if you change the curated definitions.
+
+## Navigation
+
+- **Dashboards:** Executive cockpit, evaluation pipeline, and deployment overview. These pages show status across cases.
+- **Evaluation:** Select a process or open the active evaluation. The case stages take the work from inputs to its business case.
+- **Deployment:** Open the active case delivery plan or pilot and learning records.
+- **Libraries:** Review process templates and technology records.
+- **Active case:** Open its evidence and questions. The page shows only that case. Use the case selector to change the scope.
+- **Help:** Use **How it works** in the top bar. It stays separate from work and status pages.

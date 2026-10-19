@@ -1,4 +1,5 @@
-import { APP_SCHEMA, CASE_TABS, copy, seedWorkspace } from './data.js';
+import { researchedProducts } from './products.js';
+import { APP_SCHEMA, CASE_TABS, copy, seedWorkspace, INPUT_GROUPS, SOURCE_STATES } from './data.js';
 import { validateCase, validateObservation } from './engine.js';
 
 export const STORAGE_KEY = 'hybrid-workforce-v2';
@@ -11,12 +12,25 @@ export function validateWorkspace(value) {
   const configIds = new Set(value.configs.map(v => v.id));
   for (const c of value.cases) {
     if (!c || !c.id || !c.name || !c.site || !c.baseline || !c.economics || !Array.isArray(c.actions) || !Array.isArray(c.scenarios) || !c.deployment || !Array.isArray(c.sources) || !Array.isArray(c.observations) || !Array.isArray(c.deployment.assets) || !Array.isArray(c.deployment.testResults) || !c.deployment.checklist || !c.answers || !Array.isArray(c.issues) || !Array.isArray(c.history)) { errors.push('A case is incomplete.'); continue; }
+    if (c.inputGroups !== undefined) {
+      const groups=c.inputGroups, ids=new Set(INPUT_GROUPS.map(g=>g[0]));
+      if (!groups || typeof groups!=='object' || Array.isArray(groups)) errors.push(`${c.name}: invalid input groups.`);
+      else for (const [id,record] of Object.entries(groups)) {
+        if (!ids.has(id) || !record || typeof record!=='object' || Array.isArray(record) || Object.values(record).some(v=>typeof v!=='string'||v.length>20000)) { errors.push(`${c.name}: invalid input group record.`); continue; }
+        if (record.status && !SOURCE_STATES.includes(record.status)) errors.push(`${c.name}: invalid input data status.`);
+        if (record.sourceId && !c.sources.some(s=>s?.id===record.sourceId)) errors.push(`${c.name}: input source is missing.`);
+      }
+    }
     if (c.lastTab && !CASE_TABS.includes(c.lastTab)) errors.push(`${c.name}: the saved case stage is invalid.`);
     if ([...c.actions,...c.scenarios,...c.sources,...c.observations,...c.deployment.assets,...c.deployment.testResults,...c.issues].some(x=>!x||typeof x!=='object')) { errors.push(`${c.name}: a child record is invalid.`); continue; }
     if (c.actions?.length > 500 || !c.scenarios.length || c.scenarios.length > 500 || c.observations.length > 10000) { errors.push('A case needs at least one option and must stay within the local record limits.'); continue; }
     // Drafts may have no actions or unknown requirements. Structural errors still fail import.
-    for (const msg of validateCase(c)) if (/cycle|unique|dependency/.test(msg)) errors.push(`${c.name}: ${msg}`);
+    for (const msg of validateCase(c)) if (msg==='The action dependencies contain a cycle.'||msg==='Action identifiers must be unique.'||msg.endsWith(': dependency is not valid.')) errors.push(`${c.name}: ${msg}`);
     for (const a of c.actions) for (const key of ['seconds','frequency','payloadKg','reachM','aisleM']) if (a[key] != null && (typeof a[key] !== 'number' || !Number.isFinite(a[key]) || a[key] < 0)) errors.push(`${c.name}: invalid action ${key}.`);
+    for(const a of c.actions){
+      if(a.requiredCapabilities!==undefined&&(!Array.isArray(a.requiredCapabilities)||a.requiredCapabilities.length>50||a.requiredCapabilities.some(x=>typeof x!=='string'||x.length>120)))errors.push(`${c.name}: invalid capability requirements.`);
+      if(a.humanRetained!==undefined&&typeof a.humanRetained!=='boolean')errors.push(`${c.name}: invalid retained human flag.`);
+    }
     const allowedKeys = ['demandDaily','peakFactor','shifts','shiftHours','daysYear','peoplePerShift','humanUtilPct','salaryAnnual','minPeoplePerShift','staffingCover','qualityTargetPct'];
     for (const key of allowedKeys) if (c.baseline[key] != null && (typeof c.baseline[key] !== 'number' || !Number.isFinite(c.baseline[key]) || c.baseline[key] < 0)) errors.push(`${c.name}: invalid ${key}.`);
     for (const [key, val] of Object.entries(c.economics || {})) if (typeof val === 'number' && (!Number.isFinite(val) || val < 0)) errors.push(`${c.name}: invalid ${key}.`);
@@ -29,8 +43,9 @@ export function validateWorkspace(value) {
     for (const o of c.observations) errors.push(...validateObservation(o).map(msg => `${c.name}: ${msg}`));
   }
   for (const v of value.configs) {
+    if(v.capabilities!==undefined&&(!Array.isArray(v.capabilities)||v.capabilities.length>50||v.capabilities.some(x=>typeof x!=='string'||x.length>120)))errors.push('Configuration capabilities must be a short text list.');
     if (!v.id || !v.name || !Array.isArray(v.skills) || !v.times || typeof v.times !== 'object') errors.push('A configuration is incomplete.');
-    for (const key of ['payloadKg','reachM','minAisleM','successPct','interventionPct','recoverySec','chargePct','downtimePct','price','leaseMonthly','supportAnnual','energyAnnual']) if (v[key] != null && (typeof v[key] !== 'number' || !Number.isFinite(v[key]) || v[key] < 0)) errors.push(`${v.name}: invalid ${key}.`);
+    for (const key of ['payloadKg','reachM','minAisleM','successPct','interventionPct','recoverySec','chargePct','downtimePct','price','leaseMonthly','supportAnnual','energyAnnual','extraCapex','extraOpexAnnual']) if (v[key] != null && (typeof v[key] !== 'number' || !Number.isFinite(v[key]) || v[key] < 0)) errors.push(`${v.name}: invalid ${key}.`);
     if (Object.values(v.times || {}).some(n => typeof n !== 'number' || !Number.isFinite(n) || n <= 0)) errors.push(`${v.name}: task times must be positive numbers.`);
   }
   return [...new Set(errors)];
@@ -39,6 +54,8 @@ export function validateWorkspace(value) {
 export function createStore({ storage = null, fetcher = null, onStatus = () => {} } = {}) {
   let workspace = seedWorkspace(), serverVersion = null, timer = null, saving = false, queued = false, hadLocal = false, dirty = false;
   try { const stored = storage?.getItem(STORAGE_KEY); if (stored) { const parsed = JSON.parse(stored); if (!validateWorkspace(parsed).length) { workspace = parsed; hadLocal = true; } } } catch { onStatus('Local data could not be read. The sample workspace is open.', 'warning'); }
+  function addResearchRecords() { let added=false;for(const product of researchedProducts())if(!workspace.configs.some(v=>v.id===product.id)){workspace.configs.push(product);added=true;}return added; }
+  addResearchRecords();
   const listeners = [];
   function publish() { for (const fn of listeners) fn(workspace); }
   function localSave() {
@@ -76,7 +93,7 @@ export function createStore({ storage = null, fetcher = null, onStatus = () => {
       save();
     },
     addCase(c) { workspace.cases.push(c); workspace.activeCaseId = c.id; save(); },
-    replace(next) { const errors = validateWorkspace(next); if (errors.length) throw new Error(errors[0]); workspace = copy(next); if (!workspace.cases.some(c => c.id === workspace.activeCaseId)) workspace.activeCaseId = workspace.cases[0].id; save(); },
+    replace(next) { const errors = validateWorkspace(next); if (errors.length) throw new Error(errors[0]); workspace = copy(next); addResearchRecords(); if (!workspace.cases.some(c => c.id === workspace.activeCaseId)) workspace.activeCaseId = workspace.cases[0].id; save(); },
     save,
     flush: serverSave,
     async connect() {
@@ -86,7 +103,7 @@ export function createStore({ storage = null, fetcher = null, onStatus = () => {
         const remote = await response.json(); serverVersion = remote.version;
         if (remote.workspace) {
           if (validateWorkspace(remote.workspace).length) throw new Error('Invalid server data');
-          if ((!hadLocal && !dirty) || remote.workspace.savedAt >= workspace.savedAt) { workspace = remote.workspace; localSave(); publish(); }
+          if ((!hadLocal && !dirty) || remote.workspace.savedAt >= workspace.savedAt) { workspace = remote.workspace; const added=addResearchRecords();localSave(); publish();if(added)await serverSave(); }
           else await serverSave();
         } else { localSave(); await serverSave(); }
         onStatus('Saved to browser and local database', 'saved');

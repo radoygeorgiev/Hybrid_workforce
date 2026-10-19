@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.1.0-vision.1 · 19 October 2026
+
+- Added 70 source-linked process variants from 19 flow photos and the owner whiteboard.
+- Added automatic capability previews and complete work-bundle drafts.
+- Added ten real product records with primary sources and variant-specific prices.
+- Added per-unit CAPEX/OPEX scope and explicit EUR cost evidence.
+- Made evaluation the starting view and made its stages more prominent.
+- Grouped dashboards, evaluation work, deployment work, and libraries. Moved Help to the top bar and scoped evidence to the active case.
+- Added multi-capability and carried-load checks. Model version is planning-2.1.0.
+
+
+## 2.0.0-vision.2 · 19 October 2026
+
+- Added all 12 potential input groups, with source links and validity records.
+- Added explicit group saving, compatible imports, and server validation.
+- Added the How it works page with the full flow, return paths, and current limits.
+- Calculation rules remain unchanged.
+
+
 ## 2.0.0-vision.1 · 18 October 2026
 
 - Rebuilt the app around atomic actions and a shared case from inputs to field learning.

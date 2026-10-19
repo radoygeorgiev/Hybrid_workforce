@@ -1,4 +1,4 @@
-# Current status · 18 October 2026
+# Current status · 19 October 2026
 
 Branch: `ämbition-vision`.
 
@@ -28,8 +28,8 @@ The first simulation/evidence method, exact automotive site/process, AGIBOT conf
 
 ## Verification
 
-- 31 JavaScript tests pass. They cover partial work, fleet constraints, unknown values, cash/position separation, extra staffing, purchase/lease costs, ramp-aware payback, horizon limits, adverse scenarios, import, persistence, and report escaping.
-- 10 Python tests pass. They cover SQLite round trips, stale-save protection, invalid data, source-file download, same-origin checks, and private-path rejection.
+- 34 JavaScript tests pass. They cover partial work, fleet constraints, unknown values, cash/position separation, extra staffing, purchase/lease costs, ramp-aware payback, horizon limits, adverse scenarios, import, persistence, and report escaping.
+- 11 Python tests pass. They cover SQLite round trips, stale-save protection, invalid data, source-file download, same-origin checks, and private-path rejection.
 - Browser walkthrough passed: edit an action, verify recalculation, reload, compare fleet counts, generate matched options, record a planning decision, create intended assets, inspect readiness gaps, add a sample observation, open an improvement issue, attach a source, and download a recommendation report.
 - The default desktop view and a 390 × 844 narrow-screen view were checked. The menu closes after navigation. The page had no horizontal overflow at that narrow width.
 - The bundle syntax check and both build scripts pass. Browser error logs were empty during the checked path.
@@ -39,3 +39,24 @@ Local review URL: `http://127.0.0.1:8093/index.html`. The server must remain run
 The sample walkthrough records are saved in local `.data` storage. They are not source evidence or part of the Git commit. A fresh checkout starts from the supplied sample cases.
 
 Function coverage and the remaining boundary for each of the 52 functions: [docs/v2-implementation.csv](docs/v2-implementation.csv).
+
+## 19 October additions
+
+- Added 12 editable input groups with explicit group save, source links, data state, ownership, capture time, and validity limits.
+- Existing cases work without a data reset. Input groups are retained in workspace exports and service request files.
+- Added the separate How it works page with a ten-step flow, decision branches, case links, and an input/output support map.
+- Browser check: flow links work. An input-group value survives save and reload. Temporary check text was cleared. No browser errors were reported.
+- Calculation rules are unchanged. Context records do not feed the screening model automatically.
+
+## Process and product update · 19 October
+
+- 19 flow photos plus one whiteboard are mapped to 70 draft process variants and 1,508 action entries.
+- Selection gives a rule-based capability preview. New cases retain complete work-bundle drafts, source links, unknown numeric inputs, and a required source-path review.
+- Ten real product records are available. Published prices keep their native currency and exact model scope. Complete EUR project costs remain unknown until entered.
+- Added unit CAPEX/OPEX, cost-basis records, multi-capability checks, and carried-load assignment checks. Model version is planning-2.1.0.
+- 44 JavaScript and 12 Python tests pass. Browser checks use separate test data. The open 8080 workspace was not replaced.
+- Important limits: photo-derived actions need site confirmation; branch execution is a reviewed linear case path; no automatic CAD/physics/learning/dispatch adapter is connected.
+
+## Navigation update
+
+Grouped the menu into Dashboards, Evaluation, Deployment, and Libraries. The evaluation pipeline is a separate dashboard view. Evidence and questions are scoped to the active case. How it works is a visible Help control in the top bar. The active case remains visible while the menu can scroll. Desktop and mobile navigation were checked. There are 44 JavaScript tests and 12 Python tests.

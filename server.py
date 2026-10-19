@@ -31,6 +31,19 @@ def validate_workspace(value):
     for c in cases:
         if not all(isinstance(c.get(key), dict) for key in ("baseline", "economics", "deployment")) or not all(isinstance(c.get(key), list) for key in ("actions", "scenarios", "sources", "observations")):
             raise ValueError("A case is incomplete.")
+        if "inputGroups" in c:
+            groups = c["inputGroups"]
+            valid_ids = {"layout", "process", "demand", "inventory", "workforce", "automation", "capabilities", "status", "constraints", "rules", "traffic", "sensors"}
+            statuses = {"Sample", "Assumed", "Supplier claim", "Simulated", "Measured", "Unknown", "Out of date"}
+            if not isinstance(groups, dict):
+                raise ValueError("Input groups must be an object.")
+            for key, record in groups.items():
+                if key not in valid_ids or not isinstance(record, dict) or any(not isinstance(v, str) or len(v) > 20000 for v in record.values()):
+                    raise ValueError("An input group is invalid.")
+                if record.get("status") and record["status"] not in statuses:
+                    raise ValueError("An input data status is invalid.")
+                if record.get("sourceId") and not any(s.get("id") == record["sourceId"] for s in c["sources"] if isinstance(s, dict)):
+                    raise ValueError("An input source is missing.")
         if len(c["actions"]) > 500 or not c["scenarios"] or len(c["scenarios"]) > 500 or len(c["observations"]) > 10000:
             raise ValueError("A case exceeds the local record limit.")
         for group in (c["baseline"], c["economics"]):
@@ -40,6 +53,11 @@ def validate_workspace(value):
         if len(ids) != len(c["actions"]) or None in ids:
             raise ValueError("Action identifiers must be unique.")
         for a in c["actions"]:
+            capabilities = a.get("requiredCapabilities")
+            if capabilities is not None and (not isinstance(capabilities, list) or len(capabilities) > 50 or any(not isinstance(x, str) or len(x) > 120 for x in capabilities)):
+                raise ValueError("Action capabilities must be a short text list.")
+            if "humanRetained" in a and not isinstance(a["humanRetained"], bool):
+                raise ValueError("Retained human flag must be true or false.")
             for key in ("seconds", "frequency", "payloadKg", "reachM", "aisleM"):
                 n = a.get(key)
                 if n is not None and (type(n) not in (int, float) or not math.isfinite(n) or n < 0):
@@ -51,6 +69,14 @@ def validate_workspace(value):
                 raise ValueError("An assignment has a missing action or configuration.")
             if any(key not in config_ids or type(count) is not int or not 0 <= count <= 100 for key, count in s["counts"].items()):
                 raise ValueError("A fleet count is invalid.")
+    for config in configs:
+        for key in ("price", "leaseMonthly", "supportAnnual", "energyAnnual", "extraCapex", "extraOpexAnnual"):
+            value = config.get(key)
+            if value is not None and (type(value) not in (int, float) or not math.isfinite(value) or value < 0):
+                raise ValueError("Technology costs must be non-negative numbers or unknown.")
+        capabilities = config.get("capabilities")
+        if capabilities is not None and (not isinstance(capabilities, list) or len(capabilities) > 50 or any(not isinstance(x, str) or len(x) > 120 for x in capabilities)):
+            raise ValueError("Configuration capabilities must be a short text list.")
     # JSON has no NaN or infinity. Reject them at every nesting level.
     json.dumps(value, allow_nan=False)
     return value

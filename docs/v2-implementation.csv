@@ -51,3 +51,8 @@ F49,Improve and scale,Local function with stated limits,"Issue, revision, test, 
 F50,Case data and versioning,Local function with stated limits,Browser/SQLite and complete editable record export. File bytes require a .data backup.
 F51,Plain language and units,Local function with stated limits,Local function. Results depend on the entered assumptions and sources.
 F52,Integration boundaries,Planning / external integration,Four explicit request contracts. External adapters are not connected.
+F53,Potential platform input register,Local function with stated limits,12 context groups with explicit save and source links. No automatic calculation mapping or live feeds.
+F54,Application flow guide,Local function,Separate How it works view with case links and return branches.
+F55,Photo-based process library,Engineering draft,70 variants from 19 flow photos and one whiteboard. Review the selected path and action details.
+F56,Automatic capability preview,Local rule-based function,Uses all required capabilities and complete carried-load bundles. Unknown performance does not prove automation.
+F57,Real product and cost records,Source-linked records,Ten exact variants with native-currency public listings where available. Unpublished EUR costs remain unknown.

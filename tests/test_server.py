@@ -24,6 +24,25 @@ class DatabaseTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_input_groups_persist_and_reject_bad_source(self):
+        data = workspace()
+        data["cases"][0]["inputGroups"] = {"traffic": {"status": "Unknown", "detail1": "Observe peak traffic"}}
+        self.db.save(data, 0)
+        self.assertEqual(Database(self.path).read()["workspace"], data)
+        data["cases"][0]["inputGroups"]["traffic"]["sourceId"] = "missing"
+        with self.assertRaises(ValueError):
+            validate_workspace(data)
+
+    def test_technology_cost_and_capability_validation(self):
+        data = workspace()
+        data["configs"][0]["extraOpexAnnual"] = -1
+        with self.assertRaises(ValueError):
+            validate_workspace(data)
+        data["configs"][0]["extraOpexAnnual"] = None
+        data["cases"][0]["actions"][0]["requiredCapabilities"] = "vision"
+        with self.assertRaises(ValueError):
+            validate_workspace(data)
+
     def test_save_and_reopen(self):
         self.assertEqual(self.db.read(), {"workspace": None, "version": 0})
         self.assertEqual(self.db.save(workspace(), 0), 1)

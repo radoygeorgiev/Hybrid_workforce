@@ -111,3 +111,30 @@ test('every dashboard and case stage renders from the same case and escapes user
   for(const tab of ['Overview','Inputs','Process','Matches','Scenarios','Results','Deployment','Learning'])assert.ok(renderApp({...base,view:'case',tab}).includes('case-content'));
   const report=renderReport(c,w.configs);assert.ok(report.includes('&lt;script&gt;bad()&lt;/script&gt;'));assert.ok(!report.includes('<script>bad()'));
 });
+
+
+test('input records persist without changing calculated results; old workspaces remain valid',()=>{
+  const memory=new Map(),storage={getItem:k=>memory.get(k),setItem:(k,v)=>memory.set(k,v)};
+  const st=createStore({storage}),c=st.current(),s=c.scenarios.find(x=>x.id==='humanoid-3');
+  const before=evaluateScenario(c,s,st.get().configs);
+  st.updateCase(c.id,c=>{c.inputGroups={status:{status:'Unknown',detail1:'Battery snapshot pending',sourceId:'source-trial'},traffic:{status:'Assumed',detail2:'Queue study needed'}};});
+  const restored=createStore({storage});assert.equal(restored.current().inputGroups.status.detail1,'Battery snapshot pending');
+  assert.equal(evaluateScenario(restored.current(),s,restored.get().configs).annualNet,before.annualNet);
+  assert.deepEqual(validateWorkspace(restored.get()),[]);
+  delete restored.current().inputGroups;assert.deepEqual(validateWorkspace(restored.get()),[]);
+});
+
+test('input import rejects invalid records and missing sources',()=>{
+  const {w,c}=setup();c.inputGroups={layout:{status:'Verified'}};assert.ok(validateWorkspace(w).length);
+  c.inputGroups={layout:{sourceId:'missing'}};assert.ok(validateWorkspace(w).length);
+  c.inputGroups=[];assert.ok(validateWorkspace(w).length);
+});
+
+test('input register and application flow escape text and expose model limits and return paths',()=>{
+  const {w,c}=setup();c.inputGroups={layout:{detail1:'<img src=x onerror=bad()>',status:'Unknown'}};
+  const ctx={w,c,questions:[],saveStatus:'Local',role:'Engineer view',view:'case',tab:'Inputs'};
+  const inputs=renderApp(ctx);assert.ok(inputs.includes('&lt;img src=x onerror=bad()&gt;'));assert.ok(!inputs.includes('<img src=x onerror=bad()>'));
+  for(const name of ['Warehouse layout','Inventory and SKU data','Traffic and congestion','Equipment and IoT signals'])assert.ok(inputs.includes(name));
+  const flow=renderApp({...ctx,view:'workflow'});
+  assert.ok(flow.includes('workflow-chart'));assert.ok(flow.includes('No economic case?'));assert.ok(flow.includes('Pilot stop rule met?'));assert.ok(flow.includes('No live telemetry or dispatch.'));
+});
