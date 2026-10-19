@@ -89,3 +89,16 @@ test('navigation separates dashboards, work, libraries, help, and case evidence'
   assert.ok(!html.includes('Create and analyse evaluation'));
   const evidence=renderApp({...ctx,view:'evidence'});assert.ok(evidence.includes('Current case evidence'));assert.ok(!evidence.includes('Other case private source'));assert.ok(evidence.includes('Evidence case'));
 });
+
+
+test('activity display retains a whole bundle when one required action has no candidate',()=>{
+  const w=seedWorkspace(),c=makeProcessCase('klt-empty-tote-sorting-whiteboard',w.configs);
+  const ctx={w,c,view:'case',tab:'Process',questions:[],saveStatus:'Local',role:'Engineer view'};
+  const html=renderApp(ctx);
+  const sequence=html.slice(html.indexOf('<div class="activity-sequence">'),html.indexOf('Draft assignment uses complete'));
+  const pickup=sequence.slice(sequence.indexOf('Take one tote'),sequence.indexOf('Remove debris'));
+  assert.ok(pickup.includes('Bundle: retain / redesign'));
+  assert.ok(!pickup.includes('Bundle: conditional'));
+  assert.ok(html.includes('Assignment basis'));
+  assert.ok(html.includes('Peel'));
+});

@@ -62,3 +62,11 @@ small,.metric-detail,.section-title p,.prototype-line,.app-footer{color:#7d8e72}
 
 .sidebar-runtime{display:flex;align-items:center;gap:5px;white-space:nowrap}.sidebar-runtime .online-dot{margin:0 3px 0 0}.sidebar-runtime .version{float:none;margin-left:auto}
 @media(max-height:800px){.sidebar-case>small{display:none}.sidebar .brand{margin-bottom:12px}.sidebar nav{gap:9px}}
+
+/* Compact page titles for the application workspace. */
+.page-heading{align-items:flex-start;gap:16px;margin:22px 0 18px}
+.page-heading h1,.case-heading h1{font-size:24px;line-height:1.3;font-weight:600;letter-spacing:-.25px;margin:0 0 6px}
+.case-heading{gap:20px;margin:22px 0 16px}
+.case-heading .eyebrow{letter-spacing:.5px;margin-bottom:7px}
+.deployment-heading h2,.overview-hero h2{font-size:20px;line-height:1.35;letter-spacing:0}
+@media(max-width:700px){.page-heading{margin:18px 0 16px}.page-heading h1,.case-heading h1{font-size:22px}}

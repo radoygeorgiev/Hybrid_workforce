@@ -63,6 +63,16 @@ The EUR cost model uses hardware price plus per-unit extra CAPEX. It adds servic
 
 ## Verification
 
-44 JavaScript tests and 12 Python tests pass. The tests cover all source mappings and process graphs, unknown inputs, complete bundle assignments, multi-capability checks, retained human roles, costs, import validation, and preservation of edited records. Browser checks use a separate local review database. The existing 8080 browser workspace is not replaced.
+45 JavaScript tests and 12 Python tests pass. The tests cover all source mappings and process graphs, unknown inputs, complete bundle assignments, multi-capability checks, retained human roles, costs, import validation, and preservation of edited records. Browser checks use a separate local review database. The existing 8080 browser workspace is not replaced.
 
 Model version: planning-2.1.0. Prior reviews require confirmation after calculation-rule changes.
+
+## Completion check · 19 October 2026
+
+The requested process-library workflow is implemented. The library contains 19 flow-photo sources and the separate whiteboard source. It groups the process variants by process area and warehouse or storage type. Selection checks the curated action requirements against the product capability records. It does not extract a new process from an unseen image.
+
+Browser checks confirmed area and warehouse filters, case creation, the 13 whiteboard activity groups, action capability results, complete work bundles, and persistence after reload. The review used a separate local database on port 8095.
+
+The activity sequence now reports the complete bundle result. For example, tote pickup remains with the human when label peeling or a retained inspection blocks its carried-load bundle. The bundle table states which action prevents assignment. Individual action candidates remain visible for process redesign.
+
+The prototype work is complete for this scope. Site approval of the inferred actions, repeat counts, exception paths, safe handoffs, and actual task performance remains open. These inputs cannot be established from the source photos alone. A conditional match is not a validated robot assignment.
