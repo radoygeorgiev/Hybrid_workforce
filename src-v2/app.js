@@ -1,9 +1,10 @@
+import { processSteps, capabilityOptions } from './transformation.js';
 import { newStudy, validateBenchmark, studyRequest } from './study.js';
 import { PROCESS_LIBRARY } from './process-library.js';
 import { makeProcessCase, analyseProcess } from './process-analysis.js';
 import { seedConfigs, makeCase, uid, copy, SKILLS, STAGES, SOURCE_STATES } from './data.js';
 import { createStore, validateWorkspace } from './store.js';
-import { evaluateScenario, fitAction, searchFleet, generateOptions, readiness, validateObservation, observationMetrics } from './engine.js';
+import { MODEL_VERSION, evaluateScenario, fitAction, searchFleet, generateOptions, readiness, validateObservation, observationMetrics } from './engine.js';
 import { parseActions, parseCsv, parseTaskTimes } from './imports.js';
 import { renderApp, renderReport, htmlEscape, icon, inputField, selectField, gridFields, table, row, button, chip, euro, number } from './views.js';
 import { QUESTION_REGISTER } from './questions.js';
@@ -37,6 +38,32 @@ function downloadFile(name,content,type='application/json') { const url=URL.crea
 const jsonDownload=(name,value)=>downloadFile(name,JSON.stringify(value,null,2));
 function materialHistory(c,event) { c.history.push({event,date:new Date().toISOString(),revision:c.revision,decision:copy(c.decision||null)}); }
 function cleanScenarioCounts(c) { for(const s of c.scenarios){ const used=new Set(Object.values(s.assignments));for(const id of Object.keys(s.counts))if(!used.has(id))delete s.counts[id];for(const id of used)if(id!=='human'&&s.counts[id]==null)s.counts[id]=1; } }
+
+function designOption(c) {
+ let s=c.scenarios.find(s=>s.id===c.selectedScenarioId)||c.scenarios[0];
+ if(s.kind==='manual'){s={...copy(s),id:uid('redesign'),name:'Proposed process redesign',kind:'hybrid',processChanges:[]};c.scenarios.push(s);c.selectedScenarioId=s.id;}
+ return s;
+}
+function processChangeDialog(id=null) {
+ const c=store.current(),s=activeScenario(),step=processSteps(c).find(x=>x.id===id),existing=(s.processChanges||[]).find(x=>x.stepId===id||x.id===id),added=existing?.type==='add'||!id;
+ openDialog(added?'Add future process step':'Propose process step change',`<p>This changes only the future design. The baseline stays in place. Added, removed, or rewritten steps require engineering validation before productivity or cash is calculated.</p>`+gridFields([
+ ...(added?[]:[formSelect('type','Proposed change',existing?.type||'change',[['change','Change activity'],['remove','Remove from future process']])]),
+ formInput('name','Future activity name',existing?.name||step?.name||'',{type:'text',required:true}),
+ ...(added?[formSelect('afterId','Insert after',existing?.afterId||'',[['','Before first step'],...processSteps(c).map(x=>[x.id,x.name])])]:[])
+ ])+formNote('reason','Engineering reason, required actions, actor, handoffs, and evidence',existing?.reason||''),v=>{
+ if(v.reason.length<5)throw new Error('Record the engineering reason and conditions.');
+ updateCase(c=>{const option=designOption(c);option.processChanges ||= [];const change={id:existing?.id||uid('change'),type:added?'add':v.type,stepId:added?'':id,afterId:added?v.afterId:'',name:v.name,reason:v.reason};option.processChanges=option.processChanges.filter(x=>x.id!==change.id&&(!id||x.stepId!==id));option.processChanges.push(change);});
+ ui.flowMode='compare';render();notify('Future design saved. Revised-process financial outputs are withheld.');
+ },{submit:'Save future proposal'});
+}
+function applyProcessDefinitionDialog() {
+ const choice=document.getElementById('case-template-choice')?.value||ui.libraryId;
+ const t=PROCESS_LIBRARY.find(t=>t.id===choice)||PROCESS_LIBRARY[0],c=store.current();
+ openDialog('Use process definition',`<p>Use <strong>${hx(t.name)}</strong> as the baseline draft for ${hx(c.name)}. Review its actions, repeat counts, exceptions, and retained human work. The existing site and business inputs stay in place. Existing actions and options are kept in case history.</p>`,()=>{
+ const next=makeProcessCase(t.id,store.get().configs);
+ updateCase(c=>{c.history.push({event:'Previous baseline before definition change',date:new Date().toISOString(),actions:copy(c.actions),scenarios:copy(c.scenarios)});for(const key of ['actions','scenarios','selectedScenarioId','processTemplateId','processArea','warehouseTypes','templateReviewed'])c[key]=copy(next[key]);c.sources.push(...next.sources.filter(s=>!c.sources.some(x=>x.id===s.id)));});ui.tab='Process';ui.flowMode='manual';ui.flowStep=null;render();
+ },{submit:'Use definition'});
+}
 
 function newCaseDialog() {
   openDialog('New evaluation',gridFields([formInput('name','Process name','',{type:'text',required:true}),formInput('site','Site','',{type:'text',required:true}),formInput('country','Country','Germany',{type:'text',required:true}),formInput('owner','Case owner','Process engineering',{type:'text',required:true}),formSelect('template','Starting point','tote',[['tote','Tote example · sample actions'],['blank','Blank action list']])])+formNote('purpose','Decision to support','Find the best useful split of work between people and technology.'),v=>{
@@ -149,13 +176,24 @@ document.addEventListener('click',async event=>{
   const node=event.target.closest('[data-action]');if(!node||node.tagName==='SELECT'||node.tagName==='INPUT')return;
   const action=node.dataset.action,id=node.dataset.id,c=store.current();
   try{
-    if(action==='navigate'){history.replaceState(null,'',`#${id}`);ui.view=id;ui.mobileMenu=false;updateCase(c=>c.lastTab=ui.tab,false);render();window.scrollTo(0,0);}
+    if(action==='navigate'){if(id==='evaluations'){ui.selectorStage='area';ui.flowMode='manual';}history.replaceState(null,'',`#${id}`);ui.view=id;ui.mobileMenu=false;updateCase(c=>c.lastTab=ui.tab,false);render();window.scrollTo(0,0);}
     else if(action==='save-input-group'){
       const record={};for(const field of node.closest('details').querySelectorAll('[data-input-key]'))record[field.dataset.inputKey.split('.').at(-1)]=field.value;
       updateCase(c=>{c.inputGroups ||= {};c.inputGroups[id]=record;});notify('Input group saved. Context values do not change calculation fields.');
     }
-    else if(action==='choose-process-area'){ui.processArea=id;ui.warehouseType='';render();}
-    else if(action==='choose-library-process'){ui.libraryId=id;render();}
+    else if(action==='choose-process-area'){ui.processArea=id;ui.warehouseType='';ui.selectorStage='process';ui.flowStep=null;render();}
+    else if(action==='choose-library-process'){ui.libraryId=id;ui.selectorStage='flow';ui.flowStep=null;render();}
+    else if(action==='selector-stage'){ui.selectorStage=id;render();}
+    else if(action==='flow-mode'){ui.flowMode=id;render();}
+    else if(action==='flow-wrap'){ui.flowWrap=!ui.flowWrap;render();}
+    else if(action==='flow-changes'){ui.flowChangesOnly=!ui.flowChangesOnly;render();}
+    else if(action==='flow-step'){ui.flowStep=ui.flowStep===id?null:id;render();document.querySelector('.flow-inspector')?.scrollIntoView({behavior:'smooth',block:'nearest'});}
+    else if(action==='flow-add')processChangeDialog();
+    else if(action==='flow-propose')processChangeDialog(id);
+    else if(action==='flow-reset'){updateCase(c=>{const s=activeScenario();s.processChanges=(s.processChanges||[]).filter(x=>x.id!==id&&x.stepId!==id);});notify('Step redesign reset. Actor assignments remain.');}
+    else if(action==='build-process-options'){const fingerprint=s=>JSON.stringify([Object.entries(s.assignments||{}).sort(),Object.entries(s.counts||{}).sort()]);const drafts=capabilityOptions(c,store.get().configs).filter(d=>!c.scenarios.some(s=>fingerprint(s)===fingerprint(d)));if(c.scenarios.length+drafts.length>500)throw new Error('The case has reached its option limit. Review the existing options.');if(!drafts.length){notify('No new capability combination was found. Existing drafts and the manual option remain available.');}else{updateCase(c=>{for(const draft of drafts){draft.id=uid('capability');c.scenarios.push(draft);}c.selectedScenarioId=drafts[0].id;});ui.flowMode='compare';render();notify(drafts.length+' capability drafts added. Complete the performance and cost inputs.');}}
+    else if(action==='apply-process-template')applyProcessDefinitionDialog();
+    else if(action==='build-delivery-plan'){updateCase(c=>{const s=activeScenario(),used=store.get().configs.filter(v=>c.actions.some(a=>s.assignments[a.id]===v.id&&!(s.processChanges||[]).some(x=>x.type==='remove'&&x.stepId===(a.activityId||a.taskGroup||a.id))));c.deployment.optionSnapshot={name:s.name,scenarioId:s.id,caseRevision:c.revision+1,modelVersion:MODEL_VERSION,date:new Date().toISOString(),assignments:copy(s.assignments),counts:copy(s.counts),hardware:used.map(v=>({id:v.id,name:v.name,revision:v.revision,hardwareModel:v.hardwareModel||'',tool:v.tool||'',software:v.software||''}))};c.deployment.target=used.map(v=>`${s.counts[v.id]??'?'} × ${v.name} / ${v.tool||'tool pending'}`).join('; ')||'Manual work-method change';});notify('Delivery plan snapshot created. Review policy, data, integration, and release gaps.');}
     else if(action==='focus-process-activity'){const target=document.getElementById('visual-'+id);if(target){target.open=true;target.scrollIntoView({behavior:'smooth',block:'center'});target.querySelector('summary').focus();}}
     else if(action==='expand-process-activities'){const items=[...document.querySelectorAll('.activity-breakdown')],expand=items.some(x=>!x.open);items.forEach(x=>x.open=expand);node.textContent=expand?'Collapse all steps':'Expand all steps';}
     else if(action==='process-visual-tab'){const root=node.closest('.process-canvas');root.querySelectorAll('.process-view-tabs button').forEach(x=>{x.classList.toggle('selected',x===node);x.setAttribute('aria-pressed',String(x===node));});const expand=id==='decomposition';root.querySelectorAll('.activity-breakdown').forEach(x=>x.open=expand);root.querySelector('[data-action="expand-process-activities"]').textContent=expand?'Collapse all steps':'Expand all steps';root.querySelector('[data-process-pane="flow"]').scrollIntoView({behavior:'smooth',block:'start'});}
@@ -164,12 +202,12 @@ document.addEventListener('click',async event=>{
     else if(action==='study-benchmark')benchmarkDialog();
     else if(action==='study-request'){saveStudyStage(node);const date=new Date().toISOString(),request=studyRequest(c,store.get().configs,id,uid('request'),date);updateCase(c=>{c.study ||= newStudy();if(c.study.requests.length>=500)throw new Error('Request record limit reached.');c.study.requests.push({id:request.id,date,stage:id,caseRevision:c.revision,studyRevision:c.study?.revision||1,status:'Prepared locally'});},false);jsonDownload(`study-${id}-${c.id}.json`,request);notify('Request prepared locally. No external workload was started.');}
     else if(action==='study-export')jsonDownload(`simulation-study-${c.id}.json`,{type:'Local simulation study',externalExecution:false,caseId:c.id,caseRevision:c.revision,study:c.study||newStudy(),process:c.actions,scenarios:c.scenarios,boundary:'Simulation-only scope. Physical deployment and production WMS/LMS integration are excluded.'});
-    else if(action==='start-process'){const next=makeProcessCase(id,store.get().configs);store.addCase(next);history.replaceState(null,'','#case');ui.view='case';ui.tab='Process';render();window.scrollTo(0,0);notify('Engineering draft created. Review the path, actions, requirements, and work splits.');}
+    else if(action==='start-process'){const next=makeProcessCase(id,store.get().configs);store.addCase(next);history.replaceState(null,'','#case');ui.view='case';ui.tab='Process';ui.flowMode='manual';ui.flowStep=null;render();window.scrollTo(0,0);notify('Engineering draft created. Review the path, actions, requirements, and work splits.');}
     else if(action==='review-process'){openDialog('Confirm the process draft',`<p>Confirm that you have reviewed the source path, activity order, exceptions, repeat rules, atomic actions, handoffs, and human roles. This does not confirm task times or machine performance.</p>`+formNote('basis','Review basis and remaining conditions',''),v=>{if(v.basis.length<12)throw new Error('Record the review basis and remaining conditions.');updateCase(c=>{c.templateReviewed=true;c.processReviewNote=v.basis;});notify('Process draft review recorded. Complete the remaining numeric inputs.');},{submit:'Record review'});}
     else if(action==='analyse-process'){openDialog('Rebuild candidate work splits','<p>Create new whole-activity work-split drafts from the current actions and real product records. Existing options remain. One machine is a placeholder, not a fleet recommendation.</p>',()=>{const analysis=analyseProcess(c,store.get().configs);updateCase(c=>{for(const v of store.get().configs.filter(v=>v.realProduct&&!v.excludedFromMatching)){const bundles=analysis.bundles.filter(b=>b.candidates.some(x=>x.id===v.id));if(bundles.length)c.scenarios.push({id:uid('draft'),name:'Reviewed draft · '+v.name,kind:'hybrid',counts:{[v.id]:1},assignments:Object.fromEntries(bundles.flatMap(b=>b.rows.map(r=>[r.action.id,v.id]))),manualFactor:1,engineeringDraft:true});}c.templateReviewed=false;});},{submit:'Create drafts'});}
     else if(action==='toggle-menu'){ui.mobileMenu=!ui.mobileMenu;render();}
     else if(action==='open-case'){history.replaceState(null,'','#case');store.setActive(id);ui.view='case';ui.tab=node.dataset.tab||store.current().lastTab||'Overview';ui.mobileMenu=false;updateCase(c=>c.lastTab=ui.tab,false);render();window.scrollTo(0,0);}
-    else if(action==='case-tab'){ui.tab=id;updateCase(c=>c.lastTab=id,false);window.scrollTo(0,0);}
+    else if(action==='case-tab'){ui.tab=id==='Scenarios'?'Matches':id;ui.flowMode=['Results','Matches','Scenarios'].includes(id)?'compare':'manual';ui.flowStep=null;updateCase(c=>c.lastTab=id,false);window.scrollTo(0,0);}
     else if(action==='new-case')newCaseDialog();
     else if(action==='edit-case')editCaseDialog();
     else if(action==='new-action')actionDialog();
@@ -221,7 +259,7 @@ document.addEventListener('change',async event=>{
     const action=node.dataset.action;
     if(action==='process-area'){ui.processArea=node.value;render();}
     else if(action==='warehouse-type'){ui.warehouseType=node.value;render();}
-    else if(action==='library-process'){ui.libraryId=node.value;render();}
+    else if(action==='library-process'){ui.libraryId=node.value;ui.selectorStage='flow';ui.flowStep=null;render();}
     else if(action==='select-scenario'){updateCase(c=>c.selectedScenarioId=node.value);}
     else if(action==='select-case'){store.setActive(node.value);}
     else if(action==='stage-filter'){ui.stageFilter=node.value;render();}

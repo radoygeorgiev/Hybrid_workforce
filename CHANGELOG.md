@@ -1,5 +1,17 @@
 # Changelog
 
+## Process transformation and delivery preparation · 20 October 2026
+
+- Added graphical baseline and future lanes, aligned change states, wrap and changes-only views, and step inspectors.
+- Added saved future-step proposals. Structural redesign outputs remain uncosted. Model version is planning-2.2.0.
+- Added bounded capability combinations and preserved complete work bundles.
+- Merged Matches and Scenarios into one visible Evaluate workspace; stored stage links remain valid.
+- Linked process-area and definition selection into one start journey.
+- Distinguished dashboards from working pages and reference logic. Removed duplicate current-case navigation.
+- Added selected-option delivery snapshots, hardware references, policy/data gaps, and preparation pipelines.
+- Kept the AWS workstream separate and additive.
+
+
 ## Scope study and assignment results · 19 October 2026
 
 - Reused the compact process chart in Matches, Business case, and exported recommendations.

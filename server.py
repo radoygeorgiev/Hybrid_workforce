@@ -94,6 +94,23 @@ def validate_workspace(value):
         for s in c["scenarios"]:
             if not isinstance(s, dict) or not isinstance(s.get("assignments"), dict) or not isinstance(s.get("counts"), dict):
                 raise ValueError("A scenario is incomplete.")
+            changes = s.get("processChanges", [])
+            step_ids = {a.get("activityId") or a.get("taskGroup") or a.get("id") for a in c["actions"]}
+            if not isinstance(changes, list) or len(changes) > 500:
+                raise ValueError("Invalid process redesign.")
+            seen_changes, seen_steps = set(), set()
+            for change in changes:
+                if not isinstance(change, dict) or change.get("type") not in ("add", "remove", "change") or not isinstance(change.get("id"), str) or not change["id"] or not isinstance(change.get("name"), str) or not change["name"].strip() or len(change["name"]) > 1000 or not isinstance(change.get("reason"), str) or not 5 <= len(change["reason"].strip()) <= 10000:
+                    raise ValueError("A process change needs its type, name, and engineering reason.")
+                if change["id"] in seen_changes:
+                    raise ValueError("Process change identifiers must be unique.")
+                seen_changes.add(change["id"])
+                if change["type"] != "add":
+                    if change.get("stepId") not in step_ids or change["stepId"] in seen_steps:
+                        raise ValueError("Invalid baseline step for redesign.")
+                    seen_steps.add(change["stepId"])
+                elif change.get("afterId") and change["afterId"] not in step_ids:
+                    raise ValueError("Invalid predecessor for added step.")
             if any(key not in ids or actor != "human" and actor not in config_ids for key, actor in s["assignments"].items()):
                 raise ValueError("An assignment has a missing action or configuration.")
             if any(key not in config_ids or type(count) is not int or not 0 <= count <= 100 for key, count in s["counts"].items()):

@@ -1,4 +1,4 @@
-export const MODEL_VERSION = 'planning-2.1.0';
+export const MODEL_VERSION = 'planning-2.2.0';
 export const finite = value => typeof value === 'number' && Number.isFinite(value);
 export const round = (value, digits = 2) => finite(value) ? Number(value.toFixed(digits)) : null;
 export const total = values => values.reduce((a, b) => a + b, 0);
@@ -59,6 +59,7 @@ export function evaluateScenario(c, scenario, configs, overrides = {}) {
   const errors = validateCase({ ...c, baseline: b, economics: e });
   const warnings = ['Planning model: no traffic, queue, charger schedule, spatial collision, or site safety validation.'];
   const start = { id: scenario.id, name: scenario.name, modelVersion: MODEL_VERSION, revision: c.revision, errors, warnings, valid: false, status: 'needs-data', cashflows: [], fleet: [], capacity: null, annualNet: null, payback: null, quality: null };
+  if(scenario.processChanges?.length)errors.push('Process redesign is a visual engineering draft. Validate revised actions, dependencies, timings, handoffs, and model mapping before calculating productivity or cash benefit.');
   if (errors.length) return start;
   if (b.demandDaily === 0) return { ...start, status: 'no-demand', errors: ['Demand is zero. No automation benefit can be calculated.'] };
   if (c.actions.some(a => a.parallel)) return { ...start, errors: ['Parallel work is recorded. A shared-resource or event model is required before this local calculation can run.'] };

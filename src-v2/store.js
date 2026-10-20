@@ -1,3 +1,4 @@
+import { validateProcessChanges } from './transformation.js';
 import { validateStudy } from './study.js';
 import { researchedProducts } from './products.js';
 import { APP_SCHEMA, CASE_TABS, copy, seedWorkspace, INPUT_GROUPS, SOURCE_STATES } from './data.js';
@@ -38,6 +39,7 @@ export function validateWorkspace(value) {
     for (const [key, val] of Object.entries(c.economics || {})) if (typeof val === 'number' && (!Number.isFinite(val) || val < 0)) errors.push(`${c.name}: invalid ${key}.`);
     const actionIds = new Set(c.actions?.map(a => a.id));
     for (const s of c.scenarios) {
+      errors.push(...validateProcessChanges(s?.processChanges,c));
       if (!s || !s.id || !s.name || !s.assignments || !s.counts) { errors.push('A scenario is incomplete.'); continue; }
       if (Object.entries(s.assignments).some(([id, actor]) => !actionIds.has(id) || actor !== 'human' && !configIds.has(actor))) errors.push(`${c.name}: an assignment has a missing action or configuration.`);
       if (Object.entries(s.counts).some(([id, count]) => !configIds.has(id) || !Number.isInteger(count) || count < 0 || count > 100)) errors.push(`${c.name}: invalid fleet counts.`);

@@ -4,7 +4,7 @@ Basis: the owner-supplied September 2026 DP World Prototype Scope, pages 2–4. 
 
 ## Decision workflow
 
-The AWS scope augments the existing platform. The eight case stages and existing platform functions stay in place. **AWS deployment plan** is a separate page under **AWS programme**. It stores a plan for the selected evaluation case. It is not a required stage or a replacement for the platform deployment module.
+The AWS scope augments the existing platform. The existing platform functions stay in place. The owner later requested one visible Evaluate workspace for matching and scenarios; this change is independent of the AWS scope. **AWS deployment plan** is a separate page under **AWS programme**. It stores a plan for the selected evaluation case. It is not a required stage or a replacement for the platform deployment module.
 
 The compact process chart is shared by the process library, Matches, Business case, and the recommendation report. In evaluation views, the chart uses the selected scenario assignments. It does not infer a deployed robot from a capability candidate.
 

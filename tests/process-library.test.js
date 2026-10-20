@@ -63,7 +63,7 @@ test('research migration adds missing records and preserves edited configuration
 test('library cases exclude fictional configurations from generated matching options',()=>{
   const w=seedWorkspace(),c=makeProcessCase('kit-to-stock',w.configs);assert.deepEqual(generateOptions(c,w.configs),[]);
   const ctx={w,c,view:'processes',questions:[],saveStatus:'Local',role:'Engineer view',tab:'Process'};
-  const library=renderApp(ctx);assert.ok(library.includes('Create evaluation'));assert.ok(library.includes('Process explorer'));assert.ok(!library.includes('Source coverage'));assert.ok(!library.includes('IMG_5903.HEIC'));
+  const library=renderApp(ctx);assert.ok(library.includes('Create evaluation'));assert.ok(library.includes('selection-breadcrumb'));assert.ok(!library.includes('Source coverage'));assert.ok(!library.includes('IMG_5903.HEIC'));
   const catalog=renderApp({...ctx,view:'catalog'});assert.ok(catalog.includes('MiR1200 Pallet Jack'));assert.ok(catalog.includes('Not converted to EUR'));
 });
 
@@ -84,7 +84,7 @@ test('navigation separates dashboards, work, libraries, help, and case evidence'
   const w=seedWorkspace(),c=w.cases[0];c.sources[0].name='Current case evidence';w.cases[1].sources[0].name='Other case private source';
   const ctx={w,c,view:'pipeline',tab:'Overview',questions:[],saveStatus:'Local',role:'Engineer view'};
   const html=renderApp(ctx),sidebar=html.slice(html.indexOf('<aside'),html.indexOf('</aside>'));
-  for(const label of ['Dashboards','Evaluation','Deployment','Libraries','Evaluation pipeline','Current evaluation','Delivery plan','Evidence and questions'])assert.ok(sidebar.includes(label));
+  for(const label of ['Dashboards','Evaluation','Deployment','Reference logic','Evaluation pipeline','CURRENT EVALUATION','Delivery plan','Evidence and questions'])assert.ok(sidebar.includes(label));
   assert.ok(!sidebar.includes('How it works'));assert.ok(html.includes('Help: How it works'));
   assert.ok(!html.includes('Create and analyse evaluation'));
   const evidence=renderApp({...ctx,view:'evidence'});assert.ok(evidence.includes('Current case evidence'));assert.ok(!evidence.includes('Other case private source'));assert.ok(evidence.includes('Evidence case'));
@@ -104,36 +104,25 @@ test('activity display retains a whole bundle when one required action has no ca
 });
 
 
-test('visual process library renders every process with flow nodes and expandable capability rows',()=>{
-  const w=seedWorkspace(),c=w.cases[0];
-  for(const t of PROCESS_LIBRARY){
-    const html=renderApp({w,c,view:'processes',libraryId:t.id,processArea:t.area,questions:[],role:'Engineer view',saveStatus:'Local'});
-    assert.ok(html.includes('class="engineering-flow compact-process"'),t.id);
-    assert.equal((html.match(/class="activity-breakdown engineering-step /g)||[]).length,t.activities.length,t.id);
-    for(const a of t.actions)assert.ok(html.includes('visual-'+a.activityId),a.id);
-    assert.ok(html.includes('Exceptions and repeat rules'));
-    assert.ok(!html.includes('<img'));
-  }
+test('visual process library renders every process as selectable baseline graph nodes',()=>{
+ const w=seedWorkspace(),c=w.cases[0];
+ for(const t of PROCESS_LIBRARY){
+  const html=renderApp({w,c,view:'processes',libraryId:t.id,processArea:t.area,questions:[],role:'Engineer view',saveStatus:'Local'});
+  assert.ok(html.includes('transformation-sheet'),t.id);
+  assert.equal((html.match(/data-action="flow-step"/g)||[]).length,t.activities.length,t.id);
+  assert.ok(html.includes('Exceptions and repeat rules'));
+  assert.ok(!html.includes('<img'));
+ }
 });
 
-
-test('process-step actions are contained in collapsed engineering steps',()=>{
- const w=seedWorkspace(),t=PROCESS_LIBRARY.find(p=>p.id==='klt-empty-tote-sorting-whiteboard');
- const html=renderApp({w,c:w.cases[0],view:'processes',libraryId:t.id,questions:[],role:'Engineer view',saveStatus:'Local'});
- const steps=[...html.matchAll(/<details class="activity-breakdown engineering-step [\s\S]*?<\/details>/g)].map(m=>m[0]);
- assert.equal(steps.length,13);
- assert.ok(steps.every(s=>s.includes('engineering-symbol')&&s.includes('engineering-actions')&&s.includes('Action breakdown')));
- assert.ok(steps.every(s=>!s.slice(0,s.indexOf('>')).includes(' open')));
- assert.ok(!html.includes('decomposition-heading'));
+test('selected graph steps reveal their own atomic actions without changing the baseline',()=>{
+ const w=seedWorkspace(),t=PROCESS_LIBRARY.find(p=>p.id==='klt-empty-tote-sorting-whiteboard'),key=t.actions[0].activityId;
+ const html=renderApp({w,c:w.cases[0],view:'processes',libraryId:t.id,flowStep:key,questions:[],role:'Engineer view',saveStatus:'Local'});
+ assert.ok(html.includes('flow-inspector'));assert.ok(html.includes('Inspect the pallet and route'));assert.ok(html.includes('Atomic action'));
+ assert.equal((html.match(/data-action="flow-step"/g)||[]).length,13);
 });
 
-
-test('compact process steps expose their atomic actions before expansion',()=>{
- const w=seedWorkspace(),t=PROCESS_LIBRARY.find(p=>p.name==='Rear container unloading');
- assert.ok(t);
- const html=renderApp({w,c:w.cases[0],view:'processes',libraryId:t.id,questions:[],role:'Engineer view',saveStatus:'Local'});
- const steps=[...html.matchAll(/<details class="activity-breakdown engineering-step [\s\S]*?<\/details>/g)].map(m=>m[0]);
- assert.equal(steps.length,7);
- for(const step of steps){const summary=step.slice(0,step.indexOf('</summary>'));assert.ok(summary.includes('atomic-preview'));assert.ok(summary.includes('compact-step-title'));}
- assert.ok(!html.includes('engineering-lane'));
+test('related process selection is linked from area to process to baseline',()=>{
+ const w=seedWorkspace();const html=renderApp({w,c:w.cases[0],view:'processes',processArea:'Inbound',selectorStage:'process',questions:[],role:'Engineer view',saveStatus:'Local'});
+ assert.ok(html.includes('2 · Choose a process in Inbound'));assert.ok(html.includes('definition-choices'));assert.ok(!html.includes('aria-label="Process explorer"'));
 });

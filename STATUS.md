@@ -69,3 +69,15 @@ Grouped the menu into Dashboards, Evaluation, Deployment, and Libraries. The eva
 - Local request packages do not submit or execute external workloads.
 - Scope map: docs/aws-scope-implementation.md. External runtime and agent functions are mock interfaces.
 - Both builds, 53 domain tests, and 13 server tests pass. Browser checks covered actor changes, sample benchmark entry, configuration persistence, independent plan revisions, and the unchanged eight-stage workflow.
+
+## Owner annotation update · 20 October
+
+- All 12 annotation topics are mapped in docs/annotation-review-2026-10-20.md.
+- Graphical baseline/future comparison replaces the default process table depiction. Atomic actions are available through step inspectors.
+- Future redesign records preserve the baseline. Added/removed/rewritten steps block productivity and economics. They need a general revised-process calculation basis.
+- Evaluate combines matching, assignment, options, and fleet work. Stored Scenarios links remain valid.
+- Area/process selection, dashboard identity, reference logic, current-case navigation, and delivery preparation are revised.
+- Browser checks covered new-case creation, capability generation, graphical step inspection, added/removed proposals, persistence, and delivery snapshots. Review data is isolated on port 8097.
+- Model version is planning-2.2.0. Prior review records require confirmation.
+
+- Final verification: 58 domain tests and 14 server tests pass. Both bundles build. No external execution was performed.

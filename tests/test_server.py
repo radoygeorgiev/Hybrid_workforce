@@ -57,6 +57,16 @@ class DatabaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_workspace(data)
 
+    def test_process_redesign_records_persist_and_validate_step_links(self):
+        data = workspace()
+        change = {"id": "remove-a", "type": "remove", "stepId": "a", "name": "Remove activity", "reason": "Engineering proposal for review"}
+        data["cases"][0]["scenarios"][0]["processChanges"] = [change]
+        self.db.save(data, 0)
+        self.assertEqual(Database(self.path).read()["workspace"], data)
+        change["stepId"] = "missing"
+        with self.assertRaises(ValueError):
+            validate_workspace(data)
+
     def test_save_and_reopen(self):
         self.assertEqual(self.db.read(), {"workspace": None, "version": 0})
         self.assertEqual(self.db.save(workspace(), 0), 1)

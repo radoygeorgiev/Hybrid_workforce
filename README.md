@@ -90,6 +90,12 @@ Read [the engineering review](docs/process-and-product-review.md), [process inde
 
 ## AWS deployment plan and result diagrams
 
-The existing eight-stage case workflow remains. **AWS programme → AWS deployment plan** is an additional, case-linked workstream based on the supplied September 2026 scope. It stores capture, robot, task, demonstration, benchmark, DES, learning, cost, and handover notes. It prepares local request manifests and records external benchmark results. GPU, Isaac, SimPy, training, and agent services are not connected.
+The platform workflow remains independent of the AWS plan. Matches and Scenarios now share one visible Evaluate workspace. **AWS programme → AWS deployment plan** is an additional, case-linked workstream based on the supplied September 2026 scope. It stores capture, robot, task, demonstration, benchmark, DES, learning, cost, and handover notes. It prepares local request manifests and records external benchmark results. GPU, Isaac, SimPy, training, and agent services are not connected.
 
 The compact process diagram also appears in Matches, Business case, and exported recommendations. It uses the selected scenario to show human, technology, and shared work. Missing productivity remains unknown. See [the scope map](docs/aws-scope-implementation.md) for local functions and external work.
+
+## Graphical process transformation
+
+Start evaluation follows area → process definition → baseline → case. The graph supports Manual, Compare, Future, Changes only, Wrap flow, and step inspection. Step changes are saved as future proposals. Reassignment changes an actor; it does not remove the physical step. Added, removed, and rewritten steps are not costed by this planning model. Actor/fleet variants on an unchanged process use the existing engine. See [the annotation implementation map](docs/annotation-review-2026-10-20.md).
+
+The deployment workspace can snapshot the selected option, list exact configuration records, and show policy/data preparation by process step. A snapshot is a planning record. It does not approve physical operation.
