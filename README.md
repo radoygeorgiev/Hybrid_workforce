@@ -99,3 +99,7 @@ The compact process diagram also appears in Matches, Business case, and exported
 Start evaluation follows area → process definition → baseline → case. The graph supports Manual, Compare, Future, Changes only, Wrap flow, and step inspection. Step changes are saved as future proposals. Reassignment changes an actor; it does not remove the physical step. Added, removed, and rewritten steps are not costed by this planning model. Actor/fleet variants on an unchanged process use the existing engine. See [the annotation implementation map](docs/annotation-review-2026-10-20.md).
 
 The deployment workspace can snapshot the selected option, list exact configuration records, and show policy/data preparation by process step. A snapshot is a planning record. It does not approve physical operation.
+
+### Value-added service definitions
+
+The process library has 126 definitions. This includes 56 researched VAS drafts across eight sectors, with 840 proposed atomic actions. Select Value-added services, then use the sector filter or process search. See [the research and decomposition register](docs/vas-process-research.md) and [the structured records](docs/vas-process-research.json). Service references do not validate the proposed activity sequence or robot performance.

@@ -7,7 +7,7 @@ root = Path(__file__).resolve().parent
 source = root / "src-v2"
 questions = json.loads((root / "docs/v2-design/design-data.json").read_text(encoding="utf-8"))["questions"]
 (source / "questions.js").write_text("export const QUESTION_REGISTER = " + json.dumps(questions, ensure_ascii=False) + ";\n", encoding="utf-8")
-modules = ["products.js", "data.js", "process-library.js", "transformation.js", "engine.js", "study.js", "process-analysis.js", "store.js", "imports.js", "views.js", "questions.js", "app.js"]
+modules = ["products.js", "data.js", "vas-library.js", "process-library.js", "transformation.js", "engine.js", "study.js", "process-analysis.js", "store.js", "imports.js", "views.js", "questions.js", "app.js"]
 parts = ['/* Hybrid Workforce version 2. Local planning prototype. */\n(function(){\n"use strict";\n']
 for name in modules:
     content = (source / name).read_text(encoding="utf-8")

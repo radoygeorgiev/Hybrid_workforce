@@ -27,13 +27,13 @@ export function analyseProcess(c, configs) {
 
 export function makeProcessCase(templateId,configs) {
   const t=PROCESS_LIBRARY.find(x=>x.id===templateId);if(!t)throw new Error('Select a process from the library.');
-  const c=makeCase(t.name);c.sample=false;c.stage='Define';c.site='Site not set';c.country='Not set';c.processTemplateId=t.id;c.templateReviewed=false;c.warehouseTypes=copy(t.warehouseTypes);c.processArea=t.area;
+  const c=makeCase(t.name);c.sample=false;c.stage='Define';c.site='Site not set';c.country='Not set';c.processTemplateId=t.id;c.templateReviewed=false;c.warehouseTypes=copy(t.warehouseTypes);c.processArea=t.area;c.verticals=copy(t.verticals||[]);
   c.purpose='Check which work bundles can be shared with technology. Confirm the complete process and business case.';
   for(const key of Object.keys(c.baseline))c.baseline[key]=null;
   for(const key of Object.keys(c.economics))if(typeof c.economics[key]==='number')c.economics[key]=null;
   c.actions=copy(t.actions);for(const a of c.actions)a.frequency=null;
   const source=PROCESS_SOURCES.find(x=>x.id===t.sourceId);
-  c.sources=[{id:t.sourceId,name:source.file,type:'Process / SOP',status:'Assumed',date:'',note:t.basis+' Branches: '+t.branches,image:source.image,fileId:null}];
+  c.sources=[{id:t.sourceId,name:source.file,type:'Process / SOP',status:'Assumed',date:'',note:t.basis+(t.researchDraft?' Output: '+t.output+'. Required inputs: '+t.requiredInputs.join('; ')+'. Controls: '+t.controls:'')+' Branches: '+t.branches+(source.url?' Service source: '+source.url:''),image:source.image||null,url:source.url||'',fileId:null}];
   c.scenarios=[{id:'current',name:'Current method · inputs needed',kind:'manual',counts:{},assignments:{},manualFactor:1}];c.selectedScenarioId='current';
   c.history=[{event:'Process library engineering draft created',date:new Date().toISOString(),source:t.sourceId,templateId:t.id}];
   const analysis=analyseProcess(c,configs);

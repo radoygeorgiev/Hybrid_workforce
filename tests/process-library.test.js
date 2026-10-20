@@ -9,8 +9,8 @@ import { validateWorkspace, createStore, STORAGE_KEY } from '../src-v2/store.js'
 import { renderApp } from '../src-v2/views.js';
 
 test('every photo has process coverage and every draft has a valid ordered action graph',()=>{
-  assert.equal(PROCESS_SOURCES.length,20);assert.equal(PROCESS_LIBRARY.length,70);
-  assert.equal(new Set(PROCESS_LIBRARY.map(x=>x.id)).size,70);
+  assert.equal(PROCESS_SOURCES.filter(s=>s.id.startsWith('photo-')).length,20);assert.equal(PROCESS_LIBRARY.filter(p=>!p.researchDraft).length,70);
+  assert.equal(new Set(PROCESS_LIBRARY.map(x=>x.id)).size,PROCESS_LIBRARY.length);
   for(const source of PROCESS_SOURCES)assert.ok(PROCESS_LIBRARY.some(x=>x.sourceId===source.id),source.file);
   const w=seedWorkspace();
   for(const t of PROCESS_LIBRARY){
@@ -84,7 +84,11 @@ test('navigation separates dashboards, work, libraries, help, and case evidence'
   const w=seedWorkspace(),c=w.cases[0];c.sources[0].name='Current case evidence';w.cases[1].sources[0].name='Other case private source';
   const ctx={w,c,view:'pipeline',tab:'Overview',questions:[],saveStatus:'Local',role:'Engineer view'};
   const html=renderApp(ctx),sidebar=html.slice(html.indexOf('<aside'),html.indexOf('</aside>'));
-  for(const label of ['Dashboards','Evaluation','Deployment','Reference logic','Evaluation pipeline','CURRENT EVALUATION','Delivery plan','Evidence and questions'])assert.ok(sidebar.includes(label));
+  for(const label of ['Dashboards','Evaluation','Reference logic','Evaluation pipeline','CURRENT EVALUATION','AWS deployment plan','Deployment overview','Evidence and questions'])assert.ok(sidebar.includes(label));
+  assert.ok(!sidebar.includes('aria-label="Deployment"'));
+  assert.ok(!sidebar.includes('Delivery plan'));assert.ok(!sidebar.includes('Pilot and learning'));
+  const caseHtml=renderApp({...ctx,view:'case'});
+  assert.ok(caseHtml.includes('data-id="Deployment"'));assert.ok(caseHtml.includes('data-id="Learning"'));
   assert.ok(!sidebar.includes('How it works'));assert.ok(html.includes('Help: How it works'));
   assert.ok(!html.includes('Create and analyse evaluation'));
   const evidence=renderApp({...ctx,view:'evidence'});assert.ok(evidence.includes('Current case evidence'));assert.ok(!evidence.includes('Other case private source'));assert.ok(evidence.includes('Evidence case'));
@@ -119,7 +123,8 @@ test('selected graph steps reveal their own atomic actions without changing the 
  const w=seedWorkspace(),t=PROCESS_LIBRARY.find(p=>p.id==='klt-empty-tote-sorting-whiteboard'),key=t.actions[0].activityId;
  const html=renderApp({w,c:w.cases[0],view:'processes',libraryId:t.id,flowStep:key,questions:[],role:'Engineer view',saveStatus:'Local'});
  assert.ok(html.includes('flow-inspector'));assert.ok(html.includes('Inspect the pallet and route'));assert.ok(html.includes('Atomic action'));
- assert.equal((html.match(/data-action="flow-step"/g)||[]).length,13);
+ assert.equal((html.match(/aria-expanded="(?:true|false)"/g)||[]).length,13);
+ assert.ok(html.includes('aria-label="Atomic actions for step 1"'));assert.ok(html.includes('aria-controls="flow-action-detail"'));assert.ok(html.includes('Atomic actions within step 01'));
 });
 
 test('related process selection is linked from area to process to baseline',()=>{

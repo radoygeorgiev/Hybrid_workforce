@@ -11,8 +11,8 @@ import { QUESTION_REGISTER } from './questions.js';
 
 const appRoot = document.getElementById('app');
 const ui = { view: 'evaluations', tab: 'Overview', mobileMenu: false, search: '', stageFilter: '', siteFilter: '', questionGroup: '', questionSearch: '', role: 'Engineer view', saveStatus: 'Opening local records…' };
-ui.processArea='';ui.warehouseType='';ui.libraryId='klt-empty-tote-sorting-whiteboard';
-let suppressRender = false, modalSubmit = null, fleetResults = [], pendingImport = null, toastTimer;
+ui.processArea='';ui.warehouseType='';ui.processVertical='';ui.processSearch='';ui.libraryId='klt-empty-tote-sorting-whiteboard';
+let suppressRender = false, modalSubmit = null, fleetResults = [], pendingImport = null, toastTimer, processSearchTimer;
 let browserStorage = null; try { browserStorage = window.localStorage; } catch {}
 const store = createStore({ storage: browserStorage, fetcher: location.protocol === 'file:' ? null : window.fetch.bind(window), onStatus: (message,status) => { ui.saveStatus=message; const label=document.getElementById('save-status'); if(label){label.textContent=message;label.dataset.status=status;} } });
 const hx = htmlEscape;
@@ -61,7 +61,7 @@ function applyProcessDefinitionDialog() {
  const t=PROCESS_LIBRARY.find(t=>t.id===choice)||PROCESS_LIBRARY[0],c=store.current();
  openDialog('Use process definition',`<p>Use <strong>${hx(t.name)}</strong> as the baseline draft for ${hx(c.name)}. Review its actions, repeat counts, exceptions, and retained human work. The existing site and business inputs stay in place. Existing actions and options are kept in case history.</p>`,()=>{
  const next=makeProcessCase(t.id,store.get().configs);
- updateCase(c=>{c.history.push({event:'Previous baseline before definition change',date:new Date().toISOString(),actions:copy(c.actions),scenarios:copy(c.scenarios)});for(const key of ['actions','scenarios','selectedScenarioId','processTemplateId','processArea','warehouseTypes','templateReviewed'])c[key]=copy(next[key]);c.sources.push(...next.sources.filter(s=>!c.sources.some(x=>x.id===s.id)));});ui.tab='Process';ui.flowMode='manual';ui.flowStep=null;render();
+ updateCase(c=>{c.history.push({event:'Previous baseline before definition change',date:new Date().toISOString(),actions:copy(c.actions),scenarios:copy(c.scenarios)});for(const key of ['actions','scenarios','selectedScenarioId','processTemplateId','processArea','warehouseTypes','verticals','templateReviewed'])c[key]=copy(next[key]);c.sources.push(...next.sources.filter(s=>!c.sources.some(x=>x.id===s.id)));});ui.tab='Process';ui.flowMode='manual';ui.flowStep=null;render();
  },{submit:'Use definition'});
 }
 
@@ -181,7 +181,7 @@ document.addEventListener('click',async event=>{
       const record={};for(const field of node.closest('details').querySelectorAll('[data-input-key]'))record[field.dataset.inputKey.split('.').at(-1)]=field.value;
       updateCase(c=>{c.inputGroups ||= {};c.inputGroups[id]=record;});notify('Input group saved. Context values do not change calculation fields.');
     }
-    else if(action==='choose-process-area'){ui.processArea=id;ui.warehouseType='';ui.selectorStage='process';ui.flowStep=null;render();}
+    else if(action==='choose-process-area'){ui.processArea=id;ui.warehouseType='';ui.processVertical='';ui.processSearch='';ui.selectorStage='process';ui.flowStep=null;render();}
     else if(action==='choose-library-process'){ui.libraryId=id;ui.selectorStage='flow';ui.flowStep=null;render();}
     else if(action==='selector-stage'){ui.selectorStage=id;render();}
     else if(action==='flow-mode'){ui.flowMode=id;render();}
@@ -247,6 +247,13 @@ document.addEventListener('click',async event=>{
   }catch(error){notify(error.message,'error');}
 });
 
+document.addEventListener('input',event=>{
+  if(event.target.dataset.action!=='process-search')return;
+  const value=event.target.value,position=event.target.selectionStart;
+  clearTimeout(processSearchTimer);
+  processSearchTimer=setTimeout(()=>{ui.processSearch=value;ui.flowStep=null;render();const input=document.querySelector('[data-action="process-search"]');input?.focus();if(position!=null)input?.setSelectionRange(position,position);},180);
+});
+
 document.addEventListener('change',async event=>{
   const node=event.target,c=store.current();
   try{
@@ -258,7 +265,9 @@ document.addEventListener('change',async event=>{
     if(node.dataset.question){updateCase(c=>c.answers[node.dataset.question]=node.value,false,true);return;}
     const action=node.dataset.action;
     if(action==='process-area'){ui.processArea=node.value;render();}
-    else if(action==='warehouse-type'){ui.warehouseType=node.value;render();}
+    else if(action==='warehouse-type'){ui.warehouseType=node.value;ui.flowStep=null;render();}
+    else if(action==='process-vertical'){ui.processVertical=node.value;ui.warehouseType='';ui.flowStep=null;render();}
+    else if(action==='process-search'){clearTimeout(processSearchTimer);ui.processSearch=node.value;ui.flowStep=null;render();}
     else if(action==='library-process'){ui.libraryId=node.value;ui.selectorStage='flow';ui.flowStep=null;render();}
     else if(action==='select-scenario'){updateCase(c=>c.selectedScenarioId=node.value);}
     else if(action==='select-case'){store.setActive(node.value);}

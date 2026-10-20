@@ -98,3 +98,11 @@
 - Replaced ES module runtime dependency with browser-compatible bundle for local file execution.
 - Added standalone.html.
 - Added local start scripts and deployment notes.
+
+## 20 October 2026: VAS library and process detail
+
+- Add 56 VAS definitions for technology, healthcare, industrials, chemicals, automotive, FMCG, retail and fashion, and food and beverage.
+- Add sector and action-text filters. Keep proposed steps separate from source-backed service descriptions.
+- Link the action panel to the selected flow step with its step number, name, and selection colour.
+- Label saved evaluations and explain their relation to process definitions.
+- Remove duplicate deployment sidebar links. Retain the workflow stages and AWS programme.

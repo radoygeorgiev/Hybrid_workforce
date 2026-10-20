@@ -127,7 +127,7 @@ for a in board['actions']:
  a['handoffNote']='A change of actor while the load is held needs a reviewed buffer, fixture, or handoff. These carried-load bundles remain with one actor in the local model.'
 register=list(sources.values())
 data={'method':'Photo activity transcription plus engineering action decomposition. All profiles require owner confirmation. Warehouse types are engineering classifications, not confirmed site identities. Different source generations are retained; they are not merged into one procedure. Each path must be selected and timed before economic use.','sourceCount':len(register),'profileCount':len(flows),'sources':register,'processes':flows}
-Path('src-v2/process-library.js').write_text('export const PROCESS_SOURCES = '+json.dumps(register,ensure_ascii=False)+';\nexport const PROCESS_LIBRARY = '+json.dumps(flows,ensure_ascii=False)+';\n',encoding='utf-8')
+Path('src-v2/process-library.js').write_text("import { VAS_PROCESSES, VAS_SOURCES } from './vas-library.js';\n"+'export const PROCESS_SOURCES = '+json.dumps(register,ensure_ascii=False)+';\nexport const PROCESS_LIBRARY = '+json.dumps(flows,ensure_ascii=False)+';\nPROCESS_SOURCES.push(...VAS_SOURCES);\nPROCESS_LIBRARY.push(...VAS_PROCESSES);\n',encoding='utf-8')
 Path('docs/process-library-review.json').write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
 import csv
 with Path('docs/process-library-index.csv').open('w',newline='',encoding='utf-8-sig') as f:
