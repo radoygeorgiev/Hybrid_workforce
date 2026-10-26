@@ -81,3 +81,9 @@ Grouped the menu into Dashboards, Evaluation, Deployment, and Libraries. The eva
 - Model version is planning-2.2.0. Prior review records require confirmation.
 
 - Final verification: 58 domain tests and 14 server tests pass. Both bundles build. No external execution was performed.
+
+## Technology explorer import — 26 October 2026
+
+On branch `vision`, import the current local Auto Library catalogue and existing visual assets. Add a thumbnail gallery, eight category groups, combined filters, pagination, an inline 3D viewer, and GLB/Blender/USD downloads. Keep the four existing humanoid records in a dedicated category. Their illustration is labelled and is not a product reconstruction.
+
+Imported records stay separate from evaluation configurations. Preserve source process roles and provenance. Mark category-derived scene links as candidate navigation hints. Show missing models and unknown process links. No calculation rules changed. No Isaac Sim validation was performed.

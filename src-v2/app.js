@@ -176,7 +176,13 @@ document.addEventListener('click',async event=>{
   const node=event.target.closest('[data-action]');if(!node||node.tagName==='SELECT'||node.tagName==='INPUT')return;
   const action=node.dataset.action,id=node.dataset.id,c=store.current();
   try{
-    if(action==='navigate'){if(id==='evaluations'){ui.selectorStage='area';ui.flowMode='manual';}history.replaceState(null,'',`#${id}`);ui.view=id;ui.mobileMenu=false;updateCase(c=>c.lastTab=ui.tab,false);render();window.scrollTo(0,0);}
+    if(action==='library-group'){ui.catalogGroup=id;ui.catalogCategory='';ui.catalogPage=0;ui.catalogSelected='';render();}
+    else if(action==='reset-library-filters'){for(const key of ['catalogGroup','catalogSearch','catalogProcess','catalogCategory','catalogVendor','catalogKind','catalogAsset','catalogSelected'])ui[key]='';ui.catalogPage=0;render();}
+    else if(action==='library-page'){ui.catalogPage=Number(id)||0;ui.catalogSelected='';render();document.querySelector('.library-results-bar')?.scrollIntoView({block:'start'});}
+    else if(action==='library-process-technologies'){ui.catalogProcess=id;ui.catalogGroup='';ui.catalogCategory='';ui.catalogPage=0;ui.catalogSelected='';ui.view='catalog';history.replaceState(null,'','#catalog');render();window.scrollTo(0,0);}
+    else if(action==='open-library-model'){ui.catalogSelected=id;render();document.querySelector('.auto-selected')?.scrollIntoView({block:'start'});}
+    else if(action==='close-library-model'){ui.catalogSelected='';render();}
+    else if(action==='navigate'){if(id==='evaluations'){ui.selectorStage='area';ui.flowMode='manual';}history.replaceState(null,'',`#${id}`);ui.view=id;ui.mobileMenu=false;updateCase(c=>c.lastTab=ui.tab,false);render();window.scrollTo(0,0);}
     else if(action==='save-input-group'){
       const record={};for(const field of node.closest('details').querySelectorAll('[data-input-key]'))record[field.dataset.inputKey.split('.').at(-1)]=field.value;
       updateCase(c=>{c.inputGroups ||= {};c.inputGroups[id]=record;});notify('Input group saved. Context values do not change calculation fields.');
@@ -248,6 +254,7 @@ document.addEventListener('click',async event=>{
 });
 
 document.addEventListener('input',event=>{
+  if(event.target.dataset.action==='catalogSearch'){const value=event.target.value,position=event.target.selectionStart;clearTimeout(processSearchTimer);processSearchTimer=setTimeout(()=>{ui.catalogSearch=value;ui.catalogPage=0;render();const input=document.querySelector('[data-action="catalogSearch"]');input?.focus();if(position!=null)input?.setSelectionRange(position,position);},180);return;}
   if(event.target.dataset.action!=='process-search')return;
   const value=event.target.value,position=event.target.selectionStart;
   clearTimeout(processSearchTimer);
@@ -257,6 +264,7 @@ document.addEventListener('input',event=>{
 document.addEventListener('change',async event=>{
   const node=event.target,c=store.current();
   try{
+    if(['catalogProcess','catalogCategory','catalogKind','catalogAsset','catalogSearch','catalogVendor','catalogSort'].includes(node.dataset.action)){ui[node.dataset.action]=node.value;ui.catalogPage=0;if(node.dataset.action==='catalogProcess')ui.catalogCategory='';ui.catalogSelected='';render();return;}
     if(node.dataset.field?.startsWith('study.'))return;
     if(node.dataset.field){const value=node.type==='number'?(node.value===''?null:Number(node.value)):node.value;if(node.type==='number'&&value!=null&&(!Number.isFinite(value)||(node.min!==''&&value<Number(node.min))||(node.max!==''&&value>Number(node.max))||(node.step==='1'&&!Number.isInteger(value)))){render();throw new Error('Use a value within the field limits. The previous value was kept.');}updateCase(c=>setPath(c,node.dataset.field,value),true,true);return;}
     if(node.dataset.assignment){const actor=node.value;updateCase(c=>{let s=activeScenario();if(s.kind==='manual'&&actor!=='human'){s={...copy(s),id:uid('option'),name:'Custom hybrid from current method',kind:'hybrid'};c.scenarios.push(s);c.selectedScenarioId=s.id;}if(actor==='human')delete s.assignments[node.dataset.assignment];else s.assignments[node.dataset.assignment]=actor;cleanScenarioCounts(c);});return;}
