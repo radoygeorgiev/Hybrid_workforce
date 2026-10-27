@@ -81,3 +81,14 @@ Grouped the menu into Dashboards, Evaluation, Deployment, and Libraries. The eva
 - Model version is planning-2.2.0. Prior review records require confirmation.
 
 - Final verification: 58 domain tests and 14 server tests pass. Both bundles build. No external execution was performed.
+
+## Technology explorer import — 26 October 2026
+
+On branch `vision`, import the current local Auto Library catalogue and existing visual assets. Add a thumbnail gallery, eight category groups, combined filters, pagination, an inline 3D viewer, and GLB/Blender/USD downloads. Keep the four existing humanoid records in a dedicated category. Their illustration is labelled and is not a product reconstruction.
+
+Imported records stay separate from evaluation configurations. Preserve source process roles and provenance. Mark category-derived scene links as candidate navigation hints. Show missing models and unknown process links. No calculation rules changed. No Isaac Sim validation was performed.
+
+
+## Auto Library model refresh — 27 October 2026
+
+Refreshed the local visual catalogue from the available Auto Library routes. The snapshot contains 287 GLB previews, 72 Blender source scenes and 35 USD packages. Thirty-four GLB previews changed or became newly available; 34 USD packages changed or became newly available. Existing assets remain in use when the source model cache is unavailable. Source files remain in their role folders with content identifiers. The local browser preview was checked. The USD files were checked as packages, not run in Isaac Sim.
