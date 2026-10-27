@@ -104,12 +104,16 @@ The deployment workspace can snapshot the selected option, list exact configurat
 
 The process library has 126 definitions. This includes 56 researched VAS drafts across eight sectors, with 840 proposed atomic actions. Select Value-added services, then use the sector filter or process search. See [the research and decomposition register](docs/vas-process-research.md) and [the structured records](docs/vas-process-research.json). Service references do not validate the proposed activity sequence or robot performance.
 
+### 3D asset harness
+
+The project uses [AGENTS.md](AGENTS.md) and [docs/3d-asset-harness.md](docs/3d-asset-harness.md) to govern Blender, Isaac Sim, USD, and 3D preview assets. The harness defines stable record IDs, numbered role folders, source dependencies, review limits, and validation checks.
+
 ### Auto Library technology explorer
 
 Open **Technology records** to browse the imported Auto Library catalogue. Use the category tiles, process links, supplier filter, and asset filter. Select a card to open its preview in this page. Existing humanoid records appear in the **Humanoids** category. Their images are category illustrations; no humanoid 3D model was imported.
 
-The snapshot contains 254 source products, 59 additional system or component records, and 60 technology types. There are 278 local GLB previews, 41 Blender source files, and three USD packages. The app keeps source process relationships and category navigation hints distinct. Unknown applicability remains unassigned. Records require confirmation and do not enter calculation matching automatically.
+The snapshot contains 254 source products, 59 additional system or component records, and 60 technology types. The latest snapshot has 287 local GLB previews, 72 Blender source files, and 35 USD packages. The app keeps source process relationships and category navigation hints distinct. Unknown applicability remains unassigned. Records require confirmation and do not enter calculation matching automatically.
 
 The viewer reuses Three.js from the source library. Its licence is in `assets/auto-library/three/LICENSE`. The assets are copied into this repository. The app does not need the Auto Library server or Blender to show an existing GLB. Start the local server for previews. The standalone HTML needs the sibling `assets/auto-library` directory; it does not embed the model files.
 
-To refresh from a local Auto Library checkout, run `python scripts/import-auto-library.py --source /path/to/Auto-Library`. Then run both build scripts. This copies existing files only. It does not generate missing geometry or validate Isaac Sim operation. Blender packages preserve the scene filename and its local textures directory. External scene references require source review.
+To refresh from a local Auto Library checkout, run `python scripts/import-auto-library.py --source /path/to/Auto-Library`. Then run both build scripts. This copies existing files only. If the Auto Library cache is unavailable, the importer retains the previous assets for that record. It does not generate missing geometry or validate Isaac Sim operation. Blender packages preserve the scene filename and its local textures directory. External scene references require source review.

@@ -8,6 +8,7 @@
 - Do not claim real simulation, model training, certification, or hardware deployment from a local demonstration.
 - Change `MODEL_VERSION` when calculation rules change. Imported review records require confirmation.
 - Preserve existing design documents. Keep the old implementation in Git history.
+- Follow `docs/3d-asset-harness.md` for all Blender, Isaac Sim, USD, and 3D preview assets. Keep source IDs, file roles, dependencies, evidence state, and validation status clear. Do not use a list position as an asset ID.
 - The app uses plain JavaScript, CSS, Python, and SQLite. Do not add a package without a clear need.
 - Build: `python build-bundle.py` then `python build-standalone.py`.
 - Domain tests: `node --test tests/*.test.js`. Server tests: `python -m unittest discover -s tests -p "test_*.py"`.

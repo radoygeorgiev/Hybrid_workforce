@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {createHash} from 'node:crypto';
 import {AUTO_LIBRARY} from '../src-v2/auto-library-data.js';
 import {filterAutoLibrary,autoLibraryRecords,libraryGroup,LIBRARY_GROUPS} from '../src-v2/auto-library.js';
 import {researchedProducts} from '../src-v2/products.js';
@@ -16,8 +17,14 @@ test('import preserves product identities, process links and existing local asse
   assert.equal(record.isaacValidated,false);
   for(const process of record.processes){assert.ok(processIds.has(process.processId));assert.ok(process.provenance||process.sourceReference);}
   for(const key of ['model','thumbnail','blender','blenderPackage','usd'])if(record[key]){
-   assert.ok(record[key].startsWith('assets/auto-library/files/'));
-   assert.ok(fs.existsSync(new URL('../'+record[key],import.meta.url)),record[key]);
+   const roles={model:'03-preview',thumbnail:'03-preview',blender:'01-blender',blenderPackage:'01-blender',usd:'02-isaac-sim'};
+   const slug=value=>String(value).normalize('NFKD').replace(/[^\x00-\x7F]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80).replace(/-$/,'')||'unclassified';
+   const prefix=`assets/auto-library/catalogue-assets/${slug(record.category)}/${slug(record.id)}/${roles[key]}/${slug(record.id)}--`;
+   assert.ok(record[key].startsWith(prefix),record[key]);
+   const asset=new URL('../'+record[key],import.meta.url);
+   assert.ok(fs.existsSync(asset),record[key]);
+   const digest=createHash('sha256').update(fs.readFileSync(asset)).digest('hex').slice(0,16);
+   assert.ok(record[key].includes(`--${digest}.`),record[key]);
   }
   if(record.model){const file=fs.readFileSync(new URL('../'+record.model,import.meta.url));assert.equal(file.toString('ascii',0,4),'glTF');assert.equal(file.readUInt32LE(8),file.length);}
  }
